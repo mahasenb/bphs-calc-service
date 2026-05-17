@@ -41,12 +41,15 @@ class ChartResponse(BaseModel):
     lagna_lord: str
     ayanamsa_value: float
     rasi: list[PlanetPlacement]
-    navamsa: list[PlanetPlacement]
-    decamsa: list[PlanetPlacement]
-    dwadasamsa: list[PlanetPlacement]
-    chaturvimsa: list[PlanetPlacement]
-    trimshamsa: list[PlanetPlacement]
-    shashtyamsa: list[PlanetPlacement]
+    hora: list[PlanetPlacement]          # D2 — wealth/resources
+    drekkana: list[PlanetPlacement]      # D3 — siblings/vitality
+    saptamsa: list[PlanetPlacement]      # D7 — children/creative output
+    navamsa: list[PlanetPlacement]       # D9
+    decamsa: list[PlanetPlacement]       # D10
+    dwadasamsa: list[PlanetPlacement]    # D12 — parents/lineage
+    chaturvimsa: list[PlanetPlacement]   # D24
+    trimshamsa: list[PlanetPlacement]    # D30
+    shashtyamsa: list[PlanetPlacement]   # D60
 
 
 # --- Strength ---

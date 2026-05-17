@@ -33,12 +33,15 @@ class PlanetData:
 class ChartSnapshot:
     person: PersonalData
     rasi_chart: dict[str, PlanetData]
-    navamsa_chart: dict[str, PlanetData]
-    decamsa_chart: dict[str, PlanetData]
-    dwadasamsa_chart: dict[str, PlanetData]
-    chaturvimsa_chart: dict[str, PlanetData]
-    trimshamsa_chart: dict[str, PlanetData]
-    shashtyamsa_chart: dict[str, PlanetData]
+    hora_chart: dict[str, PlanetData]          # D2
+    drekkana_chart: dict[str, PlanetData]      # D3
+    navamsa_chart: dict[str, PlanetData]       # D9
+    decamsa_chart: dict[str, PlanetData]       # D10
+    dwadasamsa_chart: dict[str, PlanetData]    # D12
+    chaturvimsa_chart: dict[str, PlanetData]   # D24
+    trimshamsa_chart: dict[str, PlanetData]    # D30
+    saptamsa_chart: dict[str, PlanetData]      # D7
+    shashtyamsa_chart: dict[str, PlanetData]   # D60
     lagna: str
     lagna_lord: str
     ayanamsa_value: float
@@ -56,7 +59,7 @@ _SWE_PLANETS = {
 
 _VARGA_DIVISORS = {
     "navamsa": 9, "decamsa": 10, "dwadasamsa": 12,
-    "chaturvimsa": 24, "trimshamsa": 30, "shashtyamsa": 60,
+    "chaturvimsa": 24, "trimshamsa": 30, "saptamsa": 7, "shashtyamsa": 60,
 }
 
 # Aspects each planet casts (house offsets, 1-based from its own house)
@@ -98,6 +101,63 @@ def _varga_longitude(tropical_lon: float, ayanamsa: float, divisor: int) -> floa
     varga_sign_offset = int(deg_in_sign / (30 / divisor))
     varga_sign = (sign_idx * divisor + varga_sign_offset) % 12
     return varga_sign * 30
+
+
+def _hora_sign(sidereal: float) -> int:
+    """D2 Hora — two 15° halves per sign. Odd signs: Sun(Leo)/Moon(Cancer); even: Moon/Sun.
+
+    BPHS odd signs (Aries, Gemini, Leo …) are 0-indexed even (0,2,4,6,8,10).
+    """
+    sign_idx = int(sidereal // 30)
+    in_first_half = (sidereal % 30) < 15
+    if sign_idx % 2 == 0:               # BPHS odd sign
+        return 4 if in_first_half else 3    # Leo=4, Cancer=3
+    else:                               # BPHS even sign
+        return 3 if in_first_half else 4
+
+
+def _drekkana_sign(sidereal: float) -> int:
+    """D3 Drekkana — triplicity-based (BPHS). Each 10° decan goes to the same-element sign.
+
+    1st decan = same sign, 2nd = 5th from it (+4), 3rd = 9th from it (+8).
+    """
+    sign_idx = int(sidereal // 30)
+    section = int((sidereal % 30) / 10)    # 0, 1, or 2
+    offsets = (0, 4, 8)
+    return (sign_idx + offsets[section]) % 12
+
+
+def _build_special_varga_map(jd: float, ayanamsa: float,
+                              sign_fn) -> dict[str, "PlanetData"]:
+    """Build a varga planet map using a caller-supplied sign-index function.
+
+    `sign_fn(sidereal_lon: float) -> int` must return a 0-indexed sign index.
+    Houses are not meaningful in non-rasi vargas; all default to 1.
+    """
+    raw: dict[str, tuple[float, bool]] = {}
+    for name, pid in _SWE_PLANETS.items():
+        flags = swe.FLG_SIDEREAL | swe.FLG_SPEED
+        result, _ = swe.calc_ut(jd, pid, flags)
+        lon = result[0] % 360
+        retro = result[3] < 0
+        raw[name] = (lon, retro)
+
+    rahu_lon = raw["Rahu"][0]
+    raw["Ketu"] = (_ketu_longitude(rahu_lon), False)
+
+    planets: dict[str, PlanetData] = {}
+    for name, (sidereal_lon, retro) in raw.items():
+        sign_idx = sign_fn(sidereal_lon)
+        final_lon = sign_idx * 30.0
+        sign, deg = utils.longitude_to_sign_and_degree(final_lon)
+        nakshatra = utils.longitude_to_nakshatra(final_lon)
+        dignity = utils.get_planet_dignity(name, sign)
+        planets[name] = PlanetData(
+            planet=name, sign=sign, degrees=round(deg, 4),
+            nakshatra=nakshatra, dignity=dignity, house=1,
+            conjunctions=[], aspects=[], is_retrograde=retro,
+        )
+    return planets
 
 
 def _compute_house(lon: float, house_cusps: list[float]) -> int:
@@ -196,11 +256,14 @@ class Chart:
         self._snapshot = ChartSnapshot(
             person=self.person,
             rasi_chart=rasi,
+            hora_chart=_build_special_varga_map(jd, ayanamsa, _hora_sign),
+            drekkana_chart=_build_special_varga_map(jd, ayanamsa, _drekkana_sign),
             navamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 9),
             decamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 10),
             dwadasamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 12),
             chaturvimsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 24),
             trimshamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 30),
+            saptamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 7),
             shashtyamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 60),
             lagna=lagna_sign,
             lagna_lord=utils.get_sign_lord(lagna_sign),

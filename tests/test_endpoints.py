@@ -43,16 +43,37 @@ def test_source():
 # /v1/chart — structural tests (golden numerics added after first run)
 # ---------------------------------------------------------------------------
 
+_VALID_SIGNS = {
+    "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+    "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+}
+
+
 def test_chart_sample_a_structure():
     r = client.post("/v1/chart", json=SAMPLE_A)
     assert r.status_code == 200
     body = r.json()
-    assert body["lagna"] in [
-        "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
-        "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
-    ]
+    assert body["lagna"] in _VALID_SIGNS
     assert len(body["rasi"]) == 9   # 9 planets
     assert body["ayanamsa_value"] > 20.0  # Lahiri ~23-24° in modern era
+
+
+def test_chart_new_vargas():
+    """D2/D3/D7/D12 must be present and well-formed."""
+    r = client.post("/v1/chart", json=SAMPLE_A)
+    assert r.status_code == 200
+    body = r.json()
+    for varga in ("hora", "drekkana", "saptamsa", "dwadasamsa"):
+        assert varga in body, f"Missing varga: {varga}"
+        assert len(body[varga]) == 9, f"{varga} must have 9 planet entries"
+        for p in body[varga]:
+            assert p["sign"] in _VALID_SIGNS, f"{varga}/{p['planet']} invalid sign: {p['sign']}"
+
+    # D2 Hora — every planet must be Cancer or Leo (the only two hora signs)
+    for p in body["hora"]:
+        assert p["sign"] in ("Cancer", "Leo"), (
+            f"Hora sign must be Cancer or Leo, got {p['sign']} for {p['planet']}"
+        )
 
 
 def test_chart_deterministic():
