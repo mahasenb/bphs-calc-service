@@ -1,0 +1,60 @@
+# GitHub Actions workflow for the bphs-calc-service repo
+# (github.com/mahasenb/bphs-calc-service)
+#
+# Copy this file to .github/workflows/publish.yml in that repo.
+# It builds the Docker image and publishes it to GitHub Container Registry
+# so that infra/docker-compose.yml can pull it instead of building from source.
+#
+# After the first successful run, switch docker-compose.yml to use:
+#   image: ghcr.io/mahasenb/bphs-calc-service:latest
+# and comment out the build: block.
+
+name: Build and publish image
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write   # needed to push to ghcr.io
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # automatic, no setup needed
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            # tag every main-branch push as :latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            # tag releases as :v1.2.3
+            type=semver,pattern={{version}}
+            # tag every branch push as :branch-name (useful for testing)
+            type=ref,event=branch
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache layers between runs to speed up builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
