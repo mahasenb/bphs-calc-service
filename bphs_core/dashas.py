@@ -74,7 +74,7 @@ def _vimshottari_mahadashas(snapshot: ChartSnapshot,
 
     for i in range(9):
         lord = VIMSHOTTARI_ORDER[(start_idx + i) % 9]
-        yrs = remaining_first if i == 0 else VIMSHOTTARI_YEARS[lord]
+        yrs = VIMSHOTTARI_YEARS[lord]
         end = current + timedelta(days=yrs * 365.25)
         periods.append(DashaPeriod(
             lord=lord, level="mahadasha", system="vimshottari",
@@ -121,7 +121,7 @@ def _yogini_dashas(snapshot: ChartSnapshot,
 
     for i in range(8):
         yogini = YOGINI_ORDER[(yogini_idx + i) % 8]
-        yrs = remaining_first if i == 0 else YOGINI_YEARS[yogini]
+        yrs = YOGINI_YEARS[yogini]
         end = current + timedelta(days=yrs * 365.25)
         periods.append(DashaPeriod(
             lord=YOGINI_PLANET_MAP[yogini], level="mahadasha", system="yogini",
