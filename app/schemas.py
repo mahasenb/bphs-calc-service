@@ -22,6 +22,25 @@ class TransitRequest(PersonalDataIn):
     at_date: str               # ISO date
 
 
+class PanchangRequest(PersonalDataIn):
+    at_date: str               # ISO date
+
+
+# --- Panchang (for Muhurta / electional astrology) ---
+
+class PanchangResponse(BaseModel):
+    date: str
+    tithi: str
+    tithi_number: int
+    paksha: str
+    vara: str
+    nakshatra: str
+    nakshatra_lord: str
+    yoga: str
+    karana: str
+    is_auspicious_for: list[str]
+
+
 # --- Chart ---
 
 class PlanetPlacement(BaseModel):

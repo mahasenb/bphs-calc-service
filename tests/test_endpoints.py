@@ -163,3 +163,22 @@ def test_auth_rejected():
     bad_client = TestClient(app, headers={"Authorization": "Bearer wrong"})
     r = bad_client.post("/v1/chart", json=SAMPLE_A)
     assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# /v1/panchang — structural test (values require swisseph; shape is validated)
+# ---------------------------------------------------------------------------
+
+def test_panchang_sample_a():
+    r = client.post("/v1/panchang", json={**SAMPLE_A, "at_date": "2026-05-24"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["date"] == "2026-05-24"
+    assert isinstance(body["tithi"], str) and body["tithi"]
+    assert 1 <= body["tithi_number"] <= 30
+    assert body["paksha"] in ("Shukla", "Krishna")
+    assert isinstance(body["vara"], str) and body["vara"]
+    assert isinstance(body["nakshatra"], str) and body["nakshatra"]
+    assert isinstance(body["yoga"], str) and body["yoga"]
+    assert isinstance(body["karana"], str) and body["karana"]
+    assert isinstance(body["is_auspicious_for"], list)

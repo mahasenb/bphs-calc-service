@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import require_token
 from .schemas import (
-    PersonalDataIn, DashaRequest, TransitRequest,
+    PersonalDataIn, DashaRequest, TransitRequest, PanchangRequest,
     ChartResponse, StrengthResponse, DashaPeriodOut,
     YogaOut, TransitResponse, SpecialPointsResponse, SourceInfo,
-    PlanetPlacement, ShadbalaItem, BhavabalaItem,
+    PanchangResponse, PlanetPlacement, ShadbalaItem, BhavabalaItem,
 )
 from bphs_core.chart import Chart, PersonalData, ChartSnapshot, PlanetData
 from bphs_core import strength as strength_mod
@@ -19,6 +19,7 @@ from bphs_core import dashas as dashas_mod
 from bphs_core import yogas as yogas_mod
 from bphs_core import transits as transits_mod
 from bphs_core import special_points as sp_mod
+from bphs_core import panchang as panchang_mod
 
 app = FastAPI(
     title="Open Vedic Calc",
@@ -179,6 +180,30 @@ def transits_endpoint(req: TransitRequest):
         sade_sati_phase=sade_sati.phase if sade_sati.is_active else None,
         saturn_vedha_blocked=saturn_vedha,
         jupiter_vedha_blocked=jupiter_vedha,
+    )
+
+
+@app.post("/v1/panchang", response_model=PanchangResponse, dependencies=AUTH)
+def panchang_endpoint(req: PanchangRequest):
+    """Return Panchang (tithi, nakshatra, yoga, karana, vara) for the requested date.
+
+    This supplies the almanac data required for Muhurta / electional astrology
+    questions that the LLM can now answer.
+    """
+    _, s = _get_chart(req)  # we still call it for consistency (location could be used later)
+    at = datetime.strptime(req.at_date, "%Y-%m-%d")
+    panch = panchang_mod.get_panchang(at)
+    return PanchangResponse(
+        date=panch.date,
+        tithi=panch.tithi,
+        tithi_number=panch.tithi_number,
+        paksha=panch.paksha,
+        vara=panch.vara,
+        nakshatra=panch.nakshatra,
+        nakshatra_lord=panch.nakshatra_lord,
+        yoga=panch.yoga,
+        karana=panch.karana,
+        is_auspicious_for=panch.is_auspicious_for,
     )
 
 
