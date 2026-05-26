@@ -130,3 +130,61 @@ class SourceInfo(BaseModel):
     source_url: str
     commit: str
     ephemeris_license: str = "Swiss Ephemeris AGPL-3.0 (data/ephe/)"
+
+
+# --- Muhurat ---
+
+class MuhurtRequest(BaseModel):
+    name: str
+    birth_date: str
+    birth_time: str
+    birth_place: str
+    latitude: float
+    longitude: float
+    timezone_offset_hours: float
+    start_date: str      # YYYY-MM-DD
+    end_date: str        # YYYY-MM-DD
+
+
+class TimeWindow(BaseModel):
+    start: str           # HH:MM
+    end: str             # HH:MM
+    label: str | None = None
+
+
+class PanchangaInfo(BaseModel):
+    tithi: str
+    tithi_end: str
+    nakshatra: str
+    nakshatra_end: str
+    yogam: str
+    yogam_end: str
+    karana: str
+    karana_end: str
+    vaara: str
+
+
+class PersonalBalam(BaseModel):
+    tara_bala: str
+    chandra_bala: str
+
+
+class DayMuhurat(BaseModel):
+    date: str            # YYYY-MM-DD
+    sunrise: str
+    sunset: str
+    moonrise: str | None = None
+    moonset: str | None = None
+    panchanga: PanchangaInfo
+    auspicious_muhurtas: list[TimeWindow]
+    chogadiya: list[TimeWindow]
+    inauspicious_periods: list[TimeWindow]
+    amrita_periods: list[TimeWindow]
+    panchaka_free: bool
+    personal_balam: PersonalBalam | None = None
+    all_muhurtas: list[TimeWindow]
+
+
+class MuhurtResponse(BaseModel):
+    days: list[DayMuhurat]
+

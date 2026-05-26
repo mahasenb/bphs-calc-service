@@ -156,6 +156,35 @@ def test_special_points_sample_a():
 
 
 # ---------------------------------------------------------------------------
+# /v1/muhurat
+# ---------------------------------------------------------------------------
+
+def test_muhurat_endpoint():
+    req = {
+        **SAMPLE_A,
+        "start_date": "2026-05-26",
+        "end_date": "2026-05-28"
+    }
+    r = client.post("/v1/muhurat", json=req)
+    assert r.status_code == 200
+    body = r.json()
+    assert "days" in body
+    assert len(body["days"]) == 3
+    
+    first_day = body["days"][0]
+    assert first_day["date"] == "2026-05-26"
+    assert "sunrise" in first_day
+    assert "sunset" in first_day
+    assert "panchanga" in first_day
+    assert "auspicious_muhurtas" in first_day
+    assert "chogadiya" in first_day
+    assert "inauspicious_periods" in first_day
+    assert "personal_balam" in first_day
+    assert "tara_bala" in first_day["personal_balam"]
+    assert "chandra_bala" in first_day["personal_balam"]
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 
@@ -163,3 +192,4 @@ def test_auth_rejected():
     bad_client = TestClient(app, headers={"Authorization": "Bearer wrong"})
     r = bad_client.post("/v1/chart", json=SAMPLE_A)
     assert r.status_code == 401
+

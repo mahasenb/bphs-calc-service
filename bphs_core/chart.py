@@ -2,7 +2,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Optional
 import swisseph as swe
-from . import utils  # sets ephemeris path on import
+from jhora.panchanga import drik
+from jhora.horoscope.chart import charts
+from . import utils  # sets ephemeris path and Lahiri mode on import
 
 
 @dataclass
@@ -49,19 +51,6 @@ class ChartSnapshot:
     jd: float = 0.0
 
 
-# Swiss Ephemeris planet IDs
-_SWE_PLANETS = {
-    "Sun": swe.SUN, "Moon": swe.MOON, "Mars": swe.MARS,
-    "Mercury": swe.MERCURY, "Jupiter": swe.JUPITER,
-    "Venus": swe.VENUS, "Saturn": swe.SATURN,
-    "Rahu": swe.TRUE_NODE,
-}
-
-_VARGA_DIVISORS = {
-    "navamsa": 9, "decamsa": 10, "dwadasamsa": 12,
-    "chaturvimsa": 24, "trimshamsa": 30, "saptamsa": 7, "shashtyamsa": 60,
-}
-
 # Aspects each planet casts (house offsets, 1-based from its own house)
 _ASPECTS = {
     "Sun": [7], "Moon": [7], "Mercury": [7], "Venus": [7],
@@ -75,89 +64,6 @@ def _jd_from_person(p: PersonalData) -> float:
     utc_hour = (naive.hour + naive.minute / 60 + naive.second / 3600
                 - p.timezone_offset_hours)
     return swe.julday(naive.year, naive.month, naive.day, utc_hour)
-
-
-def _get_ayanamsa(jd: float) -> float:
-    swe.set_sid_mode(swe.SIDM_LAHIRI)
-    return swe.get_ayanamsa_ut(jd)
-
-
-def _sidereal_longitude(jd: float, planet_id: int) -> tuple[float, bool]:
-    flags = swe.FLG_SIDEREAL | swe.FLG_SPEED
-    result, _ = swe.calc_ut(jd, planet_id, flags)
-    lon = result[0] % 360
-    is_retro = result[3] < 0
-    return lon, is_retro
-
-
-def _ketu_longitude(rahu_lon: float) -> float:
-    return (rahu_lon + 180) % 360
-
-
-def _varga_longitude(tropical_lon: float, ayanamsa: float, divisor: int) -> float:
-    sidereal = (tropical_lon - ayanamsa) % 360
-    sign_idx = int(sidereal // 30)
-    deg_in_sign = sidereal % 30
-    varga_sign_offset = int(deg_in_sign / (30 / divisor))
-    varga_sign = (sign_idx * divisor + varga_sign_offset) % 12
-    return varga_sign * 30
-
-
-def _hora_sign(sidereal: float) -> int:
-    """D2 Hora — two 15° halves per sign. Odd signs: Sun(Leo)/Moon(Cancer); even: Moon/Sun.
-
-    BPHS odd signs (Aries, Gemini, Leo …) are 0-indexed even (0,2,4,6,8,10).
-    """
-    sign_idx = int(sidereal // 30)
-    in_first_half = (sidereal % 30) < 15
-    if sign_idx % 2 == 0:               # BPHS odd sign
-        return 4 if in_first_half else 3    # Leo=4, Cancer=3
-    else:                               # BPHS even sign
-        return 3 if in_first_half else 4
-
-
-def _drekkana_sign(sidereal: float) -> int:
-    """D3 Drekkana — triplicity-based (BPHS). Each 10° decan goes to the same-element sign.
-
-    1st decan = same sign, 2nd = 5th from it (+4), 3rd = 9th from it (+8).
-    """
-    sign_idx = int(sidereal // 30)
-    section = int((sidereal % 30) / 10)    # 0, 1, or 2
-    offsets = (0, 4, 8)
-    return (sign_idx + offsets[section]) % 12
-
-
-def _build_special_varga_map(jd: float, ayanamsa: float,
-                              sign_fn) -> dict[str, "PlanetData"]:
-    """Build a varga planet map using a caller-supplied sign-index function.
-
-    `sign_fn(sidereal_lon: float) -> int` must return a 0-indexed sign index.
-    Houses are not meaningful in non-rasi vargas; all default to 1.
-    """
-    raw: dict[str, tuple[float, bool]] = {}
-    for name, pid in _SWE_PLANETS.items():
-        flags = swe.FLG_SIDEREAL | swe.FLG_SPEED
-        result, _ = swe.calc_ut(jd, pid, flags)
-        lon = result[0] % 360
-        retro = result[3] < 0
-        raw[name] = (lon, retro)
-
-    rahu_lon = raw["Rahu"][0]
-    raw["Ketu"] = (_ketu_longitude(rahu_lon), False)
-
-    planets: dict[str, PlanetData] = {}
-    for name, (sidereal_lon, retro) in raw.items():
-        sign_idx = sign_fn(sidereal_lon)
-        final_lon = sign_idx * 30.0
-        sign, deg = utils.longitude_to_sign_and_degree(final_lon)
-        nakshatra = utils.longitude_to_nakshatra(final_lon)
-        dignity = utils.get_planet_dignity(name, sign)
-        planets[name] = PlanetData(
-            planet=name, sign=sign, degrees=round(deg, 4),
-            nakshatra=nakshatra, dignity=dignity, house=1,
-            conjunctions=[], aspects=[], is_retrograde=retro,
-        )
-    return planets
 
 
 def _compute_house(lon: float, house_cusps: list[float]) -> int:
@@ -185,48 +91,21 @@ def _find_aspects(planet: str, house: int,
             if p != planet and d.house in aspected_houses]
 
 
-def _build_planet_map(jd: float, ayanamsa: float,
-                      house_cusps: list[float],
-                      divisor: int = 1) -> dict[str, PlanetData]:
-    raw: dict[str, tuple[float, bool]] = {}
-
-    for name, pid in _SWE_PLANETS.items():
-        flags = swe.FLG_SIDEREAL | swe.FLG_SPEED
-        result, _ = swe.calc_ut(jd, pid, flags)
-        lon = result[0] % 360
-        retro = result[3] < 0
-        raw[name] = (lon, retro)
-
-    rahu_lon = raw["Rahu"][0]
-    raw["Ketu"] = (_ketu_longitude(rahu_lon), False)
-
-    planets: dict[str, PlanetData] = {}
-    for name, (lon, retro) in raw.items():
-        if divisor == 1:
-            final_lon = lon
-        else:
-            # convert back to tropical, apply varga, then re-sidereal
-            tropical_lon = (lon + ayanamsa) % 360
-            final_lon = _varga_longitude(tropical_lon, ayanamsa, divisor)
-
-        sign, deg = utils.longitude_to_sign_and_degree(final_lon)
-        nakshatra = utils.longitude_to_nakshatra(final_lon)
+def _build_varga_chart(varga_positions, retro_planets) -> dict[str, PlanetData]:
+    chart: dict[str, PlanetData] = {}
+    for pid, (sign_idx, deg) in varga_positions[1:]:
+        name = utils.PLANETS[pid]
+        sign = utils.SIGNS[sign_idx]
+        nakshatra = utils.longitude_to_nakshatra(sign_idx * 30 + deg)
         dignity = utils.get_planet_dignity(name, sign)
-        house = _compute_house(final_lon, house_cusps) if divisor == 1 else 1
+        is_retro = pid in retro_planets
 
-        planets[name] = PlanetData(
+        chart[name] = PlanetData(
             planet=name, sign=sign, degrees=round(deg, 4),
-            nakshatra=nakshatra, dignity=dignity, house=house,
-            conjunctions=[], aspects=[], is_retrograde=retro,
+            nakshatra=nakshatra, dignity=dignity, house=1,
+            conjunctions=[], aspects=[], is_retrograde=is_retro,
         )
-
-    # fill conjunctions and aspects (Rasi only — varga aspects are complex)
-    if divisor == 1:
-        for name, pd in planets.items():
-            pd.conjunctions = _find_conjunctions(name, pd.house, planets)
-            pd.aspects = _find_aspects(name, pd.house, planets)
-
-    return planets
+    return chart
 
 
 class Chart:
@@ -236,11 +115,12 @@ class Chart:
         self._compute()
 
     def _compute(self):
-        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        drik.set_ayanamsa_mode('LAHIRI')
         jd = _jd_from_person(self.person)
-        ayanamsa = _get_ayanamsa(jd)
+        place = utils.make_place(self.person.name, self.person.latitude, self.person.longitude, self.person.timezone_offset_hours)
+        ayanamsa = drik.get_ayanamsa_value(jd)
 
-        # House cusps (Placidus; switch to equal if Placidus fails at extreme latitudes)
+        # House cusps using swisseph directly as in original codebase
         try:
             cusps, ascmc = swe.houses(jd, self.person.latitude, self.person.longitude, b"P")
         except Exception:
@@ -248,23 +128,48 @@ class Chart:
 
         # Adjust cusps to sidereal
         sid_cusps = [((c - ayanamsa) % 360) for c in cusps]
-        lagna_lon = (ascmc[0] - ayanamsa) % 360
-        lagna_sign, _ = utils.longitude_to_sign_and_degree(lagna_lon)
 
-        rasi = _build_planet_map(jd, ayanamsa, sid_cusps, 1)
+        # Calculate all divisional charts via pyjhora
+        rasi_positions = charts.rasi_chart(jd, place)
+        retro_planets = drik.planets_in_retrograde(jd, place)
 
+        lagna_sign_index, _ = rasi_positions[0][1]
+        lagna_sign = utils.SIGNS[lagna_sign_index]
+
+        # Build Rasi Chart with conjunctions and aspects
+        rasi = {}
+        for pid, (sign_idx, deg) in rasi_positions[1:]:
+            name = utils.PLANETS[pid]
+            sign = utils.SIGNS[sign_idx]
+            nakshatra = utils.longitude_to_nakshatra(sign_idx * 30 + deg)
+            dignity = utils.get_planet_dignity(name, sign)
+            is_retro = pid in retro_planets
+            final_lon = sign_idx * 30.0 + deg
+            house = _compute_house(final_lon, sid_cusps)
+
+            rasi[name] = PlanetData(
+                planet=name, sign=sign, degrees=round(deg, 4),
+                nakshatra=nakshatra, dignity=dignity, house=house,
+                conjunctions=[], aspects=[], is_retrograde=is_retro,
+            )
+
+        for name, pd in rasi.items():
+            pd.conjunctions = _find_conjunctions(name, pd.house, rasi)
+            pd.aspects = _find_aspects(name, pd.house, rasi)
+
+        # Build other divisional charts using standardized vargas
         self._snapshot = ChartSnapshot(
             person=self.person,
             rasi_chart=rasi,
-            hora_chart=_build_special_varga_map(jd, ayanamsa, _hora_sign),
-            drekkana_chart=_build_special_varga_map(jd, ayanamsa, _drekkana_sign),
-            navamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 9),
-            decamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 10),
-            dwadasamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 12),
-            chaturvimsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 24),
-            trimshamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 30),
-            saptamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 7),
-            shashtyamsa_chart=_build_planet_map(jd, ayanamsa, sid_cusps, 60),
+            hora_chart=_build_varga_chart(charts.hora_chart(rasi_positions), retro_planets),
+            drekkana_chart=_build_varga_chart(charts.drekkana_chart(rasi_positions), retro_planets),
+            navamsa_chart=_build_varga_chart(charts.navamsa_chart(rasi_positions), retro_planets),
+            decamsa_chart=_build_varga_chart(charts.dasamsa_chart(rasi_positions), retro_planets),
+            dwadasamsa_chart=_build_varga_chart(charts.dwadasamsa_chart(rasi_positions), retro_planets),
+            chaturvimsa_chart=_build_varga_chart(charts.chaturvimsamsa_chart(rasi_positions), retro_planets),
+            trimshamsa_chart=_build_varga_chart(charts.trimsamsa_chart(rasi_positions), retro_planets),
+            saptamsa_chart=_build_varga_chart(charts.saptamsa_chart(rasi_positions), retro_planets),
+            shashtyamsa_chart=_build_varga_chart(charts.shashtyamsa_chart(rasi_positions), retro_planets),
             lagna=lagna_sign,
             lagna_lord=utils.get_sign_lord(lagna_sign),
             ayanamsa_value=round(ayanamsa, 6),

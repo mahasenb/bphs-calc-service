@@ -1,8 +1,12 @@
 import os
 import swisseph as swe
+from jhora.panchanga import drik
 
 EPHE_PATH = os.path.join(os.path.dirname(__file__), "../data/ephe")
 swe.set_ephe_path(EPHE_PATH)
+
+# Initialize pyjhora ayanamsa mode
+drik.set_ayanamsa_mode('LAHIRI')
 
 SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -95,3 +99,7 @@ def get_planet_dignity(planet: str, sign: str) -> str:
     if sign_lord in _ENEMY.get(planet, []):
         return "enemy"
     return "neutral"
+
+
+def make_place(name: str, lat: float, lon: float, tz_offset: float) -> drik.Place:
+    return drik.Place(name, lat, lon, tz_offset)

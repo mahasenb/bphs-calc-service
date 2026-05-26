@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from datetime import datetime
 import swisseph as swe
+from jhora.panchanga import drik
 from .chart import ChartSnapshot
 from . import utils
 
-_SWE_TRANSIT_PLANETS = {
-    "Saturn": swe.SATURN, "Jupiter": swe.JUPITER,
-    "Mars": swe.MARS, "Rahu": swe.TRUE_NODE,
+_PYJHORA_TRANSIT_PLANETS = {
+    "Saturn": 6, "Jupiter": 4, "Mars": 2, "Rahu": 7,
 }
 
 
@@ -27,10 +27,8 @@ class SadeSatiInfo:
 
 
 def _transit_longitude(jd: float, planet_id: int) -> float:
-    swe.set_sid_mode(swe.SIDM_LAHIRI)
-    flags = swe.FLG_SIDEREAL
-    result, _ = swe.calc_ut(jd, planet_id, flags)
-    return result[0] % 360
+    drik.set_ayanamsa_mode('LAHIRI')
+    return drik.sidereal_longitude(jd, planet_id)
 
 
 def _jd_from_date(dt: datetime) -> float:
@@ -41,7 +39,7 @@ def _jd_from_date(dt: datetime) -> float:
 def get_current_transits(snapshot: ChartSnapshot, at: datetime) -> dict:
     jd = _jd_from_date(at)
     result: dict[str, TransitPlacement] = {}
-    for name, pid in _SWE_TRANSIT_PLANETS.items():
+    for name, pid in _PYJHORA_TRANSIT_PLANETS.items():
         lon = _transit_longitude(jd, pid)
         sign, deg = utils.longitude_to_sign_and_degree(lon)
         nakshatra = utils.longitude_to_nakshatra(lon)
@@ -58,7 +56,7 @@ def get_sade_sati_info(snapshot: ChartSnapshot, at: datetime) -> SadeSatiInfo:
 
     moon_sign_idx = utils.SIGNS.index(moon.sign)
     jd = _jd_from_date(at)
-    saturn_lon = _transit_longitude(jd, swe.SATURN)
+    saturn_lon = _transit_longitude(jd, 6)  # Saturn ID is 6 in pyjhora
     saturn_sign_idx = int(saturn_lon // 30) % 12
 
     diff = (saturn_sign_idx - moon_sign_idx) % 12
@@ -74,7 +72,6 @@ def get_sade_sati_info(snapshot: ChartSnapshot, at: datetime) -> SadeSatiInfo:
     # Approximate start/end: Saturn spends ~2.5 years per sign
     phase_offset = {"first": -1, "second": 0, "third": 1}[phase]
     target_sign_idx = (moon_sign_idx + phase_offset) % 12
-    target_sign = utils.SIGNS[target_sign_idx]
 
     # Find ingress and egress for that sign (search ±4 years)
     from datetime import timedelta
@@ -83,7 +80,7 @@ def get_sade_sati_info(snapshot: ChartSnapshot, at: datetime) -> SadeSatiInfo:
 
     def saturn_in_sign(dt: datetime) -> bool:
         j = _jd_from_date(dt)
-        lon = _transit_longitude(j, swe.SATURN)
+        lon = _transit_longitude(j, 6)
         return int(lon // 30) % 12 == target_sign_idx
 
     # Binary search for ingress
@@ -110,7 +107,7 @@ def get_sade_sati_info(snapshot: ChartSnapshot, at: datetime) -> SadeSatiInfo:
 
 
 def check_ashtakavarga_vedha(snapshot: ChartSnapshot,
-                              planet: str, sign: str) -> bool:
+                               planet: str, sign: str) -> bool:
     from .strength import compute_ashtakavarga
     akv = compute_ashtakavarga(snapshot, planet)
     binna = akv.get("binna", {})

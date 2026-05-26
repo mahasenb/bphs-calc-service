@@ -12,6 +12,7 @@ from .schemas import (
     ChartResponse, StrengthResponse, DashaPeriodOut,
     YogaOut, TransitResponse, SpecialPointsResponse, SourceInfo,
     PlanetPlacement, ShadbalaItem, BhavabalaItem,
+    MuhurtRequest, MuhurtResponse,
 )
 from bphs_core.chart import Chart, PersonalData, ChartSnapshot, PlanetData
 from bphs_core import strength as strength_mod
@@ -19,6 +20,9 @@ from bphs_core import dashas as dashas_mod
 from bphs_core import yogas as yogas_mod
 from bphs_core import transits as transits_mod
 from bphs_core import special_points as sp_mod
+from bphs_core import muhurat as muhurat_mod
+from bphs_core import utils
+
 
 app = FastAPI(
     title="Open Vedic Calc",
@@ -191,6 +195,38 @@ def special_points_endpoint(p: PersonalDataIn):
         atmakaraka=sp_mod.get_atmakaraka(s),
         karakamsa=sp_mod.get_karakamsa(s).sign,
     )
+
+
+@app.post("/v1/muhurat", response_model=MuhurtResponse, dependencies=AUTH)
+def muhurat_endpoint(req: MuhurtRequest):
+    _, s = _get_chart(req)
+    
+    # Extract natal Moon's nakshatra and sign from Rasi chart
+    moon_pd = s.rasi_chart.get("Moon")
+    birth_nak = moon_pd.nakshatra if moon_pd else None
+    birth_sign = moon_pd.sign if moon_pd else None
+    
+    # Parse date range
+    start_dt = datetime.strptime(req.start_date, "%Y-%m-%d").date()
+    end_dt = datetime.strptime(req.end_date, "%Y-%m-%d").date()
+    
+    # Loop over date range
+    from datetime import timedelta
+    days = []
+    curr = start_dt
+    place = utils.make_place(req.name, req.latitude, req.longitude, req.timezone_offset_hours)
+    
+    while curr <= end_dt:
+        day_data = muhurat_mod.compute_muhurat_for_day(
+            place=place,
+            target_date=curr,
+            birth_nakshatra=birth_nak,
+            birth_moon_sign=birth_sign
+        )
+        days.append(day_data)
+        curr += timedelta(days=1)
+        
+    return MuhurtResponse(days=days)
 
 
 @app.get("/healthz")
