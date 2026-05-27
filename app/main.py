@@ -13,6 +13,7 @@ from .schemas import (
     YogaOut, TransitResponse, SpecialPointsResponse, SourceInfo,
     PlanetPlacement, ShadbalaItem, BhavabalaItem,
     MuhurtRequest, MuhurtResponse,
+    CompatRequest, CompatResponse, KutaScore, MangalDoshaResult, DashaOverlap,
 )
 from bphs_core.chart import Chart, PersonalData, ChartSnapshot, PlanetData
 from bphs_core import strength as strength_mod
@@ -22,6 +23,7 @@ from bphs_core import transits as transits_mod
 from bphs_core import special_points as sp_mod
 from bphs_core import muhurat as muhurat_mod
 from bphs_core import utils
+from bphs_core import compat as compat_mod
 
 
 app = FastAPI(
@@ -227,6 +229,47 @@ def muhurat_endpoint(req: MuhurtRequest):
         curr += timedelta(days=1)
         
     return MuhurtResponse(days=days)
+
+
+@app.post("/v1/compat", response_model=CompatResponse, dependencies=AUTH)
+def compat_endpoint(req: CompatRequest):
+    _, snap_a = _get_chart(req.person_a)
+    _, snap_b = _get_chart(req.person_b)
+    result = compat_mod.compute_compat(snap_a, snap_b, date.today())
+
+    kutas = [
+        KutaScore(name=k.name, score=k.score, max_score=k.max_score,
+                  interpretation=k.interpretation)
+        for k in result.kutas
+    ]
+    dosha_a = MangalDoshaResult(
+        has_dosha=result.mangal_dosha_a.has_dosha,
+        severity=result.mangal_dosha_a.severity,
+        cancellation=result.mangal_dosha_a.cancellation,
+    )
+    dosha_b = MangalDoshaResult(
+        has_dosha=result.mangal_dosha_b.has_dosha,
+        severity=result.mangal_dosha_b.severity,
+        cancellation=result.mangal_dosha_b.cancellation,
+    )
+    overlaps = [
+        DashaOverlap(
+            start_date=o.start_date, end_date=o.end_date,
+            person_a_lord=o.person_a_lord, person_b_lord=o.person_b_lord,
+            quality=o.quality,
+        )
+        for o in result.dasha_overlaps
+    ]
+    return CompatResponse(
+        total_score=result.total_score,
+        max_score=result.max_score,
+        kutas=kutas,
+        mangal_dosha_a=dosha_a,
+        mangal_dosha_b=dosha_b,
+        nakshatra_compatibility=result.nakshatra_compatibility,
+        dasha_overlaps=overlaps,
+        composite_strength_notes=result.composite_strength_notes,
+    )
 
 
 @app.get("/healthz")

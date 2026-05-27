@@ -185,6 +185,104 @@ def test_muhurat_endpoint():
 
 
 # ---------------------------------------------------------------------------
+# /v1/compat
+# ---------------------------------------------------------------------------
+
+_COMPAT_REQ = {"person_a": SAMPLE_A, "person_b": SAMPLE_B}
+
+_VALID_SEVERITY = {"none", "mild", "strong"}
+_VALID_QUALITY  = {"favorable", "neutral", "challenging"}
+_KUTA_NAMES     = ["varna", "vasya", "tara", "yoni", "graha_maitri", "gana", "bhakoot", "nadi"]
+_KUTA_MAX       = {"varna": 1, "vasya": 2, "tara": 3, "yoni": 4,
+                   "graha_maitri": 5, "gana": 6, "bhakoot": 7, "nadi": 8}
+
+
+def test_compat_structure():
+    r = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 200
+    body = r.json()
+
+    # top-level fields
+    assert "total_score" in body
+    assert "max_score" in body
+    assert "kutas" in body
+    assert "mangal_dosha_a" in body
+    assert "mangal_dosha_b" in body
+    assert "nakshatra_compatibility" in body
+    assert "dasha_overlaps" in body
+    assert "composite_strength_notes" in body
+
+
+def test_compat_max_score_36():
+    r = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 200
+    assert r.json()["max_score"] == 36.0
+
+
+def test_compat_total_equals_sum_of_kutas():
+    r = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 200
+    body = r.json()
+    expected = round(sum(k["score"] for k in body["kutas"]), 4)
+    assert round(body["total_score"], 4) == expected
+
+
+def test_compat_kutas_well_formed():
+    r = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 200
+    kutas = r.json()["kutas"]
+    assert len(kutas) == 8
+    names = [k["name"] for k in kutas]
+    assert names == _KUTA_NAMES
+    for k in kutas:
+        assert k["max_score"] == _KUTA_MAX[k["name"]]
+        assert 0.0 <= k["score"] <= k["max_score"]
+        assert isinstance(k["interpretation"], str)
+        assert len(k["interpretation"]) > 0
+
+
+def test_compat_mangal_dosha_well_formed():
+    r = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 200
+    body = r.json()
+    for key in ("mangal_dosha_a", "mangal_dosha_b"):
+        d = body[key]
+        assert isinstance(d["has_dosha"], bool)
+        assert d["severity"] in _VALID_SEVERITY
+        assert isinstance(d["cancellation"], str)
+        if not d["has_dosha"]:
+            assert d["severity"] == "none"
+
+
+def test_compat_dasha_overlaps_well_formed():
+    r = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 200
+    overlaps = r.json()["dasha_overlaps"]
+    assert isinstance(overlaps, list)
+    for o in overlaps:
+        assert "start_date" in o and "end_date" in o
+        assert o["quality"] in _VALID_QUALITY
+        assert o["start_date"] <= o["end_date"]
+
+
+def test_compat_deterministic():
+    r1 = client.post("/v1/compat", json=_COMPAT_REQ)
+    r2 = client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r1.json() == r2.json()
+
+
+def test_compat_unauthenticated():
+    bad_client = TestClient(app, headers={"Authorization": "Bearer wrong"})
+    r = bad_client.post("/v1/compat", json=_COMPAT_REQ)
+    assert r.status_code == 401
+
+
+def test_compat_missing_fields():
+    r = client.post("/v1/compat", json={"person_a": SAMPLE_A})
+    assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 
