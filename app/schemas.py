@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -187,4 +188,43 @@ class DayMuhurat(BaseModel):
 
 class MuhurtResponse(BaseModel):
     days: list[DayMuhurat]
+
+
+# --- Compatibility ---
+
+class CompatRequest(BaseModel):
+    person_a: PersonalDataIn
+    person_b: PersonalDataIn
+
+
+class KutaScore(BaseModel):
+    name: str
+    score: float
+    max_score: float
+    interpretation: str
+
+
+class MangalDoshaResult(BaseModel):
+    has_dosha: bool
+    severity: Literal["none", "mild", "strong"]
+    cancellation: str
+
+
+class DashaOverlap(BaseModel):
+    start_date: str   # YYYY-MM-DD
+    end_date: str     # YYYY-MM-DD
+    person_a_lord: str
+    person_b_lord: str
+    quality: Literal["favorable", "neutral", "challenging"]
+
+
+class CompatResponse(BaseModel):
+    total_score: float
+    max_score: float
+    kutas: list[KutaScore]
+    mangal_dosha_a: MangalDoshaResult
+    mangal_dosha_b: MangalDoshaResult
+    nakshatra_compatibility: str
+    dasha_overlaps: list[DashaOverlap]
+    composite_strength_notes: str
 
