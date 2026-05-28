@@ -9,7 +9,8 @@ from .auth import require_token
 from .schemas import (
     PersonalDataIn, DashaRequest, TransitRequest,
     ChartResponse, StrengthResponse, DashaPeriodOut,
-    YogaOut, TransitResponse, SpecialPointsResponse, SourceInfo,
+    YogaOut, TransitResponse, TransitPlanetPlacement,
+    SpecialPointsResponse, JaiminiKaraka, SourceInfo,
     PlanetPlacement, ShadbalaItem, BhavabalaItem,
     MuhurtRequest, MuhurtResponse,
     LagnaShuddhiRequest, LagnaShuddhiResponse, LagnaShuddhiSample, TimeWindow,
@@ -73,11 +74,14 @@ def _to_personal_data(p: PersonalDataIn) -> PersonalData:
 
 
 def _pd_to_schema(pd: PlanetData) -> PlanetPlacement:
+    is_gandanta, gandanta_proximity = utils.check_gandanta(pd.sign, pd.degrees)
     return PlanetPlacement(
         planet=pd.planet, sign=pd.sign, degrees=pd.degrees,
         nakshatra=pd.nakshatra, dignity=pd.dignity, house=pd.house,
         conjunctions=pd.conjunctions, aspects=pd.aspects,
         is_retrograde=pd.is_retrograde,
+        is_gandanta=is_gandanta,
+        gandanta_proximity_degrees=gandanta_proximity if is_gandanta else None,
     )
 
 
@@ -182,6 +186,11 @@ def transits_endpoint(req: TransitRequest):
     saturn = current.get("Saturn")
     jupiter = current.get("Jupiter")
 
+    planets = [
+        TransitPlanetPlacement(planet=tp.planet, sign=tp.sign, degrees=tp.degrees, nakshatra=tp.nakshatra)
+        for tp in current.values()
+    ]
+
     sade_sati = transits_mod.get_sade_sati_info(s, at)
 
     saturn_vedha = transits_mod.check_ashtakavarga_vedha(s, "Saturn",
@@ -190,8 +199,7 @@ def transits_endpoint(req: TransitRequest):
                                                            jupiter.sign if jupiter else "")
 
     return TransitResponse(
-        saturn_sign=saturn.sign if saturn else "",
-        jupiter_sign=jupiter.sign if jupiter else "",
+        planets=planets,
         sade_sati_active=sade_sati.is_active,
         sade_sati_phase=sade_sati.phase if sade_sati.is_active else None,
         saturn_vedha_blocked=saturn_vedha,
@@ -202,11 +210,13 @@ def transits_endpoint(req: TransitRequest):
 @app.post("/v1/special-points", response_model=SpecialPointsResponse, dependencies=AUTH)
 def special_points_endpoint(p: PersonalDataIn):
     _, s = _get_chart(p)
+    karakas_raw = sp_mod.get_jaimini_karakas(s)
     return SpecialPointsResponse(
         arudha_lagna=sp_mod.get_arudha_lagna(s).sign,
         upapada=sp_mod.get_upapada(s).sign,
         atmakaraka=sp_mod.get_atmakaraka(s),
         karakamsa=sp_mod.get_karakamsa(s).sign,
+        jaimini_karakas=[JaiminiKaraka(**k) for k in karakas_raw],
     )
 
 

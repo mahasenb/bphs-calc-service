@@ -126,12 +126,66 @@ def detect_dhana_yogas(snapshot: ChartSnapshot) -> list[Yoga]:
     return yogas
 
 
+# Sign ownership for Parivartana detection
+_SIGN_LORD: dict[str, str] = {
+    "Aries": "Mars",    "Scorpio": "Mars",
+    "Taurus": "Venus",  "Libra": "Venus",
+    "Gemini": "Mercury","Virgo": "Mercury",
+    "Cancer": "Moon",
+    "Leo": "Sun",
+    "Sagittarius": "Jupiter", "Pisces": "Jupiter",
+    "Capricorn": "Saturn",    "Aquarius": "Saturn",
+}
+_KARAKA_PLANETS = {"Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"}
+
+
+def detect_parivartana_yoga(snapshot: ChartSnapshot) -> list[Yoga]:
+    """Mutual sign exchange (Parivartana) between any two of the 7 planets.
+
+    Planet A is in a sign owned by planet B, and B is in a sign owned by A.
+    """
+    yogas: list[Yoga] = []
+    planets = [p for p in _KARAKA_PLANETS if p in snapshot.rasi_chart]
+    checked: set[frozenset] = set()
+
+    for p_a in planets:
+        sign_a = snapshot.rasi_chart[p_a].sign
+        lord_of_a = _SIGN_LORD.get(sign_a)
+        if lord_of_a is None or lord_of_a == p_a:
+            continue
+        if lord_of_a not in snapshot.rasi_chart:
+            continue
+        sign_b = snapshot.rasi_chart[lord_of_a].sign
+        lord_of_b = _SIGN_LORD.get(sign_b)
+        if lord_of_b != p_a:
+            continue
+        pair = frozenset({p_a, lord_of_a})
+        if pair in checked:
+            continue
+        checked.add(pair)
+        house_a = snapshot.rasi_chart[p_a].house
+        house_b = snapshot.rasi_chart[lord_of_a].house
+        yogas.append(Yoga(
+            name="Parivartana Yoga",
+            description=(
+                f"{p_a} in {sign_a} (owned by {lord_of_a}) exchanges signs with "
+                f"{lord_of_a} in {sign_b} (owned by {p_a}) — "
+                f"houses {house_a} and {house_b} deeply interlinked"
+            ),
+            planets_involved=sorted([p_a, lord_of_a]),
+            houses_involved=sorted([house_a, house_b]),
+            strength="strong",
+        ))
+    return yogas
+
+
 def detect_all_yogas(snapshot: ChartSnapshot) -> list[Yoga]:
     yogas: list[Yoga] = []
     yogas.extend(detect_viparita_raja_yoga(snapshot))
     yogas.extend(detect_panchamahapurusha(snapshot))
     yogas.extend(detect_raja_yogas(snapshot))
     yogas.extend(detect_dhana_yogas(snapshot))
+    yogas.extend(detect_parivartana_yoga(snapshot))
     return yogas
 
 

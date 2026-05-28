@@ -6,7 +6,8 @@ from .chart import ChartSnapshot
 from . import utils
 
 _PYJHORA_TRANSIT_PLANETS = {
-    "Saturn": 6, "Jupiter": 4, "Mars": 2, "Rahu": 7,
+    "Sun": 0, "Moon": 1, "Mars": 2, "Mercury": 3,
+    "Jupiter": 4, "Venus": 5, "Saturn": 6, "Rahu": 7,
 }
 
 
@@ -46,6 +47,14 @@ def get_current_transits(snapshot: ChartSnapshot, at: datetime) -> dict:
         result[name] = TransitPlacement(
             planet=name, sign=sign, degrees=round(deg, 4), nakshatra=nakshatra,
         )
+    # Ketu is always exactly 180° from Rahu
+    rahu_lon = _transit_longitude(jd, 7)
+    ketu_lon = (rahu_lon + 180) % 360
+    ketu_sign, ketu_deg = utils.longitude_to_sign_and_degree(ketu_lon)
+    result["Ketu"] = TransitPlacement(
+        planet="Ketu", sign=ketu_sign, degrees=round(ketu_deg, 4),
+        nakshatra=utils.longitude_to_nakshatra(ketu_lon),
+    )
     return result
 
 
@@ -69,7 +78,7 @@ def get_sade_sati_info(snapshot: ChartSnapshot, at: datetime) -> SadeSatiInfo:
     else:
         return SadeSatiInfo(False, "none", at, at)
 
-    # Approximate start/end: Saturn spends ~2.5 years per sign
+    # Approximate start/end: Saturn spends ~2.46 years per sign (29.46yr / 12)
     phase_offset = {"first": -1, "second": 0, "third": 1}[phase]
     target_sign_idx = (moon_sign_idx + phase_offset) % 12
 

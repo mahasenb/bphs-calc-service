@@ -35,6 +35,8 @@ class PlanetPlacement(BaseModel):
     conjunctions: list[str]
     aspects: list[str]
     is_retrograde: bool
+    is_gandanta: bool = False
+    gandanta_proximity_degrees: float | None = None
 
 
 class ChartResponse(BaseModel):
@@ -106,9 +108,15 @@ class YogaOut(BaseModel):
 
 # --- Transits ---
 
+class TransitPlanetPlacement(BaseModel):
+    planet: str
+    sign: str
+    degrees: float
+    nakshatra: str
+
+
 class TransitResponse(BaseModel):
-    saturn_sign: str
-    jupiter_sign: str
+    planets: list[TransitPlanetPlacement]
     sade_sati_active: bool
     sade_sati_phase: str | None = None
     saturn_vedha_blocked: bool
@@ -117,11 +125,20 @@ class TransitResponse(BaseModel):
 
 # --- Special points ---
 
+class JaiminiKaraka(BaseModel):
+    abbr: str
+    name: str
+    planet: str
+    degree: float
+    domain: str
+
+
 class SpecialPointsResponse(BaseModel):
     arudha_lagna: str
     upapada: str
     atmakaraka: str
     karakamsa: str
+    jaimini_karakas: list[JaiminiKaraka] = []
 
 
 # --- Meta ---

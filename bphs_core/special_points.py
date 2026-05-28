@@ -76,6 +76,45 @@ def get_atmakaraka(snapshot: ChartSnapshot) -> str:
     return max(candidates, key=candidates.__getitem__)
 
 
+# 7-karaka Jaimini scheme: all 7 planets sorted by degree within sign descending.
+# Position 1 = AK (soul), position 7 = DK (spouse).
+_JAIMINI_KARAKA_SEQUENCE = [
+    ("AK",  "Atmakaraka",   "soul and self"),
+    ("AmK", "Amatyakaraka", "career and key advisors"),
+    ("BK",  "Bhratrukaraka","siblings and courage"),
+    ("MK",  "Matrukaraka",  "mother and emotional roots"),
+    ("PuK", "Putrakaraka",  "children and creativity"),
+    ("GK",  "Gnatikaraka",  "relatives, rivals, and health"),
+    ("DK",  "Darakaraka",   "spouse and partnerships"),
+]
+_JAIMINI_PLANETS = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"]
+
+
+def get_jaimini_karakas(snapshot: ChartSnapshot) -> list[dict]:
+    """Return all 7 Jaimini karakas sorted by degree descending.
+
+    Each entry: {abbr, name, planet, degree, domain}.
+    DK is always the planet with the lowest degree (7th position).
+    """
+    degrees = {
+        p: snapshot.rasi_chart[p].degrees
+        for p in _JAIMINI_PLANETS
+        if p in snapshot.rasi_chart
+    }
+    ranked = sorted(degrees, key=degrees.__getitem__, reverse=True)
+    result = []
+    for i, (abbr, name, domain) in enumerate(_JAIMINI_KARAKA_SEQUENCE):
+        planet = ranked[i] if i < len(ranked) else "unknown"
+        result.append({
+            "abbr": abbr,
+            "name": name,
+            "planet": planet,
+            "degree": round(degrees.get(planet, 0.0), 4),
+            "domain": domain,
+        })
+    return result
+
+
 def get_karakamsa(snapshot: ChartSnapshot) -> SpecialPoint:
     """Navamsa sign of the Atmakaraka."""
     ak = get_atmakaraka(snapshot)

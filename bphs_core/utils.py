@@ -101,5 +101,28 @@ def get_planet_dignity(planet: str, sign: str) -> str:
     return "neutral"
 
 
+_WATER_SIGNS = {"Cancer", "Scorpio", "Pisces"}
+_FIRE_SIGNS = {"Leo", "Sagittarius", "Aries"}
+_GANDANTA_PADA = 360 / 27 / 4  # one nakshatra pada = 3°20' = 3.3333...°
+
+
+def check_gandanta(sign: str, degrees: float) -> tuple[bool, float]:
+    """Return (is_gandanta, proximity_degrees) for a planet at sign/degrees.
+
+    Gandanta zones are the last nakshatra pada of each water sign and
+    first pada of the adjacent fire sign (the water→fire junction points
+    in the nakshatra wheel: Cancer/Leo, Scorpio/Sagittarius, Pisces/Aries).
+
+    proximity_degrees is the distance to the exact boundary (0 = exactly on cusp).
+    """
+    if sign in _WATER_SIGNS:
+        proximity = 30.0 - degrees  # distance to end of water sign
+        return proximity <= _GANDANTA_PADA, round(proximity, 4)
+    if sign in _FIRE_SIGNS:
+        proximity = degrees  # distance from start of fire sign
+        return proximity <= _GANDANTA_PADA, round(proximity, 4)
+    return False, round(min(degrees, 30.0 - degrees), 4)
+
+
 def make_place(name: str, lat: float, lon: float, tz_offset: float) -> drik.Place:
     return drik.Place(name, lat, lon, tz_offset)
