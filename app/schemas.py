@@ -1,12 +1,12 @@
 from typing import Literal
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date, time
 
 
 class PersonalDataIn(BaseModel):
     name: str
-    birth_date: str            # ISO date YYYY-MM-DD
-    birth_time: str            # HH:MM:SS local time
+    birth_date: date
+    birth_time: time
     birth_place: str
     latitude: float
     longitude: float
@@ -137,8 +137,8 @@ class SourceInfo(BaseModel):
 
 class MuhurtRequest(BaseModel):
     name: str
-    birth_date: str
-    birth_time: str
+    birth_date: date
+    birth_time: time
     birth_place: str
     latitude: float
     longitude: float
@@ -194,8 +194,8 @@ class MuhurtResponse(BaseModel):
 
 class LagnaShuddhiRequest(BaseModel):
     name: str
-    birth_date: str
-    birth_time: str
+    birth_date: date
+    birth_time: time
     birth_place: str
     latitude: float
     longitude: float
@@ -234,6 +234,7 @@ class LagnaShuddhiResponse(BaseModel):
 class CompatRequest(BaseModel):
     person_a: PersonalDataIn
     person_b: PersonalDataIn
+    reference_date: date | None = None
 
 
 class KutaScore(BaseModel):

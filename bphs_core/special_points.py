@@ -28,7 +28,7 @@ def get_arudha_lagna(snapshot: ChartSnapshot) -> SpecialPoint:
         arudha_house = ((2 * lord_house - 1) - 1) % 12 + 1
         if arudha_house == lord_house:
             arudha_house = ((arudha_house + 10 - 1) % 12) + 1
-        if arudha_house == 1:
+        if arudha_house in (1, 7):
             arudha_house = 10
         arudha_sign_idx = (lagna_idx + arudha_house - 1) % 12
         sign = utils.SIGNS[arudha_sign_idx]

@@ -60,19 +60,23 @@ def _moon_nakshatra_and_fraction(snapshot: ChartSnapshot) -> tuple[str, float]:
 
 
 def _vimshottari_mahadashas(snapshot: ChartSnapshot,
-                             birth_date: datetime) -> list[DashaPeriod]:
+                             birth_date: datetime,
+                             end_date: datetime | None = None) -> list[DashaPeriod]:
     nak, fraction = _moon_nakshatra_and_fraction(snapshot)
     start_lord = NAKSHATRA_LORDS[nak]
     start_idx = VIMSHOTTARI_ORDER.index(start_lord)
 
     total_years_first = VIMSHOTTARI_YEARS[start_lord]
     elapsed = fraction * total_years_first
-    remaining_first = total_years_first - elapsed
 
     periods: list[DashaPeriod] = []
     current = birth_date - timedelta(days=elapsed * 365.25)
 
-    for i in range(9):
+    cycle_count = 1
+    if end_date:
+        cycle_count = max(2, int((end_date - birth_date).days / (120 * 365.25)) + 2)
+
+    for i in range(9 * cycle_count):
         lord = VIMSHOTTARI_ORDER[(start_idx + i) % 9]
         yrs = VIMSHOTTARI_YEARS[lord]
         end = current + timedelta(days=yrs * 365.25)
@@ -107,19 +111,23 @@ def _vimshottari_antardashas(mahadasha: DashaPeriod) -> list[DashaPeriod]:
 
 
 def _yogini_dashas(snapshot: ChartSnapshot,
-                   birth_date: datetime) -> list[DashaPeriod]:
+                   birth_date: datetime,
+                   end_date: datetime | None = None) -> list[DashaPeriod]:
     nak, fraction = _moon_nakshatra_and_fraction(snapshot)
     nak_idx = utils.NAKSHATRAS.index(nak)
     yogini_idx = nak_idx % 8
     start_yogini = YOGINI_ORDER[yogini_idx]
     total_first = YOGINI_YEARS[start_yogini]
     elapsed = fraction * total_first
-    remaining_first = total_first - elapsed
 
     periods: list[DashaPeriod] = []
     current = birth_date - timedelta(days=elapsed * 365.25)
 
-    for i in range(8):
+    cycle_count = 1
+    if end_date:
+        cycle_count = max(2, int((end_date - birth_date).days / (36 * 365.25)) + 2)
+
+    for i in range(8 * cycle_count):
         yogini = YOGINI_ORDER[(yogini_idx + i) % 8]
         yrs = YOGINI_YEARS[yogini]
         end = current + timedelta(days=yrs * 365.25)
@@ -139,7 +147,7 @@ def get_dasha_timeline(snapshot: ChartSnapshot,
     result: list[DashaPeriod] = []
 
     if "vimshottari" in systems:
-        mahadashas = _vimshottari_mahadashas(snapshot, birth)
+        mahadashas = _vimshottari_mahadashas(snapshot, birth, end)
         for md in mahadashas:
             if md.end_date < start or md.start_date > end:
                 continue
@@ -150,7 +158,7 @@ def get_dasha_timeline(snapshot: ChartSnapshot,
                 result.append(ad)
 
     if "yogini" in systems:
-        for yd in _yogini_dashas(snapshot, birth):
+        for yd in _yogini_dashas(snapshot, birth, end):
             if yd.end_date < start or yd.start_date > end:
                 continue
             result.append(yd)
