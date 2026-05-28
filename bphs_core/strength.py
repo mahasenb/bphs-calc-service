@@ -82,10 +82,8 @@ def _kaala_bala(snapshot: ChartSnapshot, planet: str) -> float:
     pd = snapshot.rasi_chart.get(planet)
     if pd is None:
         return 0.0
-    # Simplified: day planets (Sun, Jupiter, Venus, Saturn) stronger during day;
-    # moon sign determines day/night (Moon in 1-6 houses = day chart approx.)
-    moon = snapshot.rasi_chart.get("Moon")
-    is_day = moon and moon.house in range(7, 13)
+    sun = snapshot.rasi_chart.get("Sun")
+    is_day = sun and sun.house in range(7, 13)
     day_planets = {"Sun", "Jupiter", "Venus", "Saturn"}
     night_planets = {"Moon", "Mars", "Mercury"}
     if is_day and planet in day_planets:

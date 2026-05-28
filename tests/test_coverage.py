@@ -109,10 +109,10 @@ class TestAuthBranches:
             import importlib
             importlib.reload(auth_mod)
 
-            # A client with no Authorization header must still get 200
-            # because the check is disabled.
+            # A protected endpoint must succeed with no Authorization header
+            # because the check is disabled when the env var is unset.
             no_auth_client = TestClient(app)
-            r = no_auth_client.get("/healthz")
+            r = no_auth_client.post("/v1/chart", json=SAMPLE_A)
             assert r.status_code == 200
         finally:
             # Restore the token for all subsequent tests

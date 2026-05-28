@@ -1,9 +1,8 @@
 import os
 import subprocess
-from datetime import datetime, time, date
-from functools import lru_cache
+from datetime import datetime, time, date, timedelta
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import require_token
@@ -28,6 +27,19 @@ from bphs_core import utils
 from bphs_core import compat as compat_mod
 
 
+_COMMIT = "unknown"
+try:
+    _COMMIT = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+    ).decode().strip()
+except Exception:
+    pass
+
+_ALLOWED_ORIGINS = [o for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o]
+
+MAX_MUHURAT_DAYS = 90
+MAX_LAGNA_SHUDDHI_DAYS = 14
+
 app = FastAPI(
     title="Open Vedic Calc",
     description="Generic BPHS calculation service — AGPL-3.0",
@@ -36,7 +48,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
@@ -49,12 +61,10 @@ AUTH = [Depends(require_token)]
 # ---------------------------------------------------------------------------
 
 def _to_personal_data(p: PersonalDataIn) -> PersonalData:
-    bd = datetime.strptime(p.birth_date, "%Y-%m-%d")
-    bt = time.fromisoformat(p.birth_time)
     return PersonalData(
         name=p.name,
-        birth_date=bd,
-        birth_time=bt,
+        birth_date=datetime.combine(p.birth_date, datetime.min.time()),
+        birth_time=p.birth_time,
         birth_place=p.birth_place,
         latitude=p.latitude,
         longitude=p.longitude,
@@ -133,7 +143,6 @@ def strength_endpoint(p: PersonalDataIn):
 
 @app.post("/v1/dashas", response_model=list[DashaPeriodOut], dependencies=AUTH)
 def dashas_endpoint(req: DashaRequest):
-    person = _to_personal_data(req)
     _, s = _get_chart(req)
     start = datetime.strptime(req.from_date, "%Y-%m-%d")
     end = datetime.strptime(req.to_date, "%Y-%m-%d")
@@ -213,9 +222,9 @@ def muhurat_endpoint(req: MuhurtRequest):
     # Parse date range
     start_dt = datetime.strptime(req.start_date, "%Y-%m-%d").date()
     end_dt = datetime.strptime(req.end_date, "%Y-%m-%d").date()
-    
-    # Loop over date range
-    from datetime import timedelta
+    if (end_dt - start_dt).days > MAX_MUHURAT_DAYS:
+        raise HTTPException(status_code=422, detail=f"Date range exceeds {MAX_MUHURAT_DAYS} days")
+
     days = []
     curr = start_dt
     place = utils.make_place(req.name, req.latitude, req.longitude, req.timezone_offset_hours)
@@ -235,6 +244,11 @@ def muhurat_endpoint(req: MuhurtRequest):
 
 @app.post("/v1/muhurat/lagna-shuddhi", response_model=LagnaShuddhiResponse, dependencies=AUTH)
 def lagna_shuddhi_endpoint(req: LagnaShuddhiRequest):
+    start_dt = datetime.strptime(req.start_date, "%Y-%m-%d").date()
+    end_dt = datetime.strptime(req.end_date, "%Y-%m-%d").date()
+    if (end_dt - start_dt).days > MAX_LAGNA_SHUDDHI_DAYS:
+        raise HTTPException(status_code=422, detail=f"Date range exceeds {MAX_LAGNA_SHUDDHI_DAYS} days")
+
     _, s = _get_chart(req)
     moon_pd = s.rasi_chart.get("Moon")
     birth_nak = moon_pd.nakshatra if moon_pd else None
@@ -270,7 +284,7 @@ def lagna_shuddhi_endpoint(req: LagnaShuddhiRequest):
 def compat_endpoint(req: CompatRequest):
     _, snap_a = _get_chart(req.person_a)
     _, snap_b = _get_chart(req.person_b)
-    result = compat_mod.compute_compat(snap_a, snap_b, date.today())
+    result = compat_mod.compute_compat(snap_a, snap_b, req.reference_date or date.today())
 
     kutas = [
         KutaScore(name=k.name, score=k.score, max_score=k.max_score,
@@ -315,14 +329,7 @@ def healthz():
 
 @app.get("/source", response_model=SourceInfo)
 def source():
-    try:
-        commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-        ).decode().strip()
-    except Exception:
-        commit = "unknown"
-
     return SourceInfo(
         source_url=os.environ.get("PUBLIC_SOURCE_URL", "https://github.com/your-org/bphs-calc-service"),
-        commit=commit,
+        commit=_COMMIT,
     )
