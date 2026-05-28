@@ -13,6 +13,7 @@ from .schemas import (
     YogaOut, TransitResponse, SpecialPointsResponse, SourceInfo,
     PlanetPlacement, ShadbalaItem, BhavabalaItem,
     MuhurtRequest, MuhurtResponse,
+    LagnaShuddhiRequest, LagnaShuddhiResponse, LagnaShuddhiSample, TimeWindow,
     CompatRequest, CompatResponse, KutaScore, MangalDoshaResult, DashaOverlap,
 )
 from bphs_core.chart import Chart, PersonalData, ChartSnapshot, PlanetData
@@ -22,6 +23,7 @@ from bphs_core import yogas as yogas_mod
 from bphs_core import transits as transits_mod
 from bphs_core import special_points as sp_mod
 from bphs_core import muhurat as muhurat_mod
+from bphs_core import lagna_shuddhi as lagna_shuddhi_mod
 from bphs_core import utils
 from bphs_core import compat as compat_mod
 
@@ -229,6 +231,39 @@ def muhurat_endpoint(req: MuhurtRequest):
         curr += timedelta(days=1)
         
     return MuhurtResponse(days=days)
+
+
+@app.post("/v1/muhurat/lagna-shuddhi", response_model=LagnaShuddhiResponse, dependencies=AUTH)
+def lagna_shuddhi_endpoint(req: LagnaShuddhiRequest):
+    _, s = _get_chart(req)
+    moon_pd = s.rasi_chart.get("Moon")
+    birth_nak = moon_pd.nakshatra if moon_pd else None
+    birth_sign = moon_pd.sign if moon_pd else None
+
+    result = lagna_shuddhi_mod.scan_lagna_shuddhi(
+        lat=req.latitude,
+        lon=req.longitude,
+        tz_offset=req.timezone_offset_hours,
+        birth_nakshatra=birth_nak,
+        birth_moon_sign=birth_sign,
+        start_date=req.start_date,
+        end_date=req.end_date,
+        activity=req.activity_category,
+        step_seconds=req.step_seconds,
+    )
+
+    best_raw = result["best_instant"]
+    best_window_raw = result["best_window"]
+    top_raw = result["top_samples"]
+
+    def _to_sample(d: dict) -> LagnaShuddhiSample:
+        return LagnaShuddhiSample(**d)
+
+    return LagnaShuddhiResponse(
+        best_instant=_to_sample(best_raw) if best_raw else None,
+        best_window=TimeWindow(**best_window_raw) if best_window_raw else None,
+        top_samples=[_to_sample(d) for d in top_raw],
+    )
 
 
 @app.post("/v1/compat", response_model=CompatResponse, dependencies=AUTH)
