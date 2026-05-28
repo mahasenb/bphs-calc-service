@@ -190,6 +190,45 @@ class MuhurtResponse(BaseModel):
     days: list[DayMuhurat]
 
 
+# --- Lagna Shuddhi (electional muhurat) ---
+
+class LagnaShuddhiRequest(BaseModel):
+    name: str
+    birth_date: str
+    birth_time: str
+    birth_place: str
+    latitude: float
+    longitude: float
+    timezone_offset_hours: float
+    start_date: str     # YYYY-MM-DD
+    end_date: str       # YYYY-MM-DD
+    activity_category: Literal["generic", "business", "marriage", "travel", "surgery"] = "generic"
+    step_seconds: int = 60
+
+
+class LagnaShuddhiSample(BaseModel):
+    instant: str                    # YYYY-MM-DD HH:MM (local time)
+    lagna_sign: str
+    lagna_lord: str
+    lagna_lord_house: int           # whole-sign house from lagna (0 = unknown)
+    lagna_lord_dignity: str
+    hora_lord: str
+    chogadiya_label: str | None
+    in_rahu_kala: bool
+    in_yamaganda: bool
+    in_gulika: bool
+    in_durmuhurtam: bool
+    in_varjyam: bool
+    in_auspicious_muhurta: str | None   # name of muhurta if inside one
+    score: float                    # 0..1
+
+
+class LagnaShuddhiResponse(BaseModel):
+    best_instant: LagnaShuddhiSample | None
+    best_window: TimeWindow | None          # tolerance band around best_instant
+    top_samples: list[LagnaShuddhiSample]   # up to 20 best-scored samples
+
+
 # --- Compatibility ---
 
 class CompatRequest(BaseModel):

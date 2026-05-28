@@ -185,6 +185,106 @@ def test_muhurat_endpoint():
 
 
 # ---------------------------------------------------------------------------
+# /v1/muhurat/lagna-shuddhi
+# ---------------------------------------------------------------------------
+
+_LAGNA_SHUDDHI_REQ = {
+    **SAMPLE_A,
+    "start_date": "2026-05-26",
+    "end_date": "2026-05-28",
+    "activity_category": "generic",
+    "step_seconds": 60,
+}
+
+_VALID_DIGNITIES = {
+    "exalted", "moolatrikona", "own sign", "friendly", "neutral", "enemy",
+    "debilitated", "unknown",
+}
+
+
+def test_lagna_shuddhi_structure():
+    r = client.post("/v1/muhurat/lagna-shuddhi", json=_LAGNA_SHUDDHI_REQ)
+    assert r.status_code == 200
+    body = r.json()
+    assert "best_instant" in body
+    assert "best_window" in body
+    assert "top_samples" in body
+
+    bi = body["best_instant"]
+    assert bi is not None
+    assert "instant" in bi        # "YYYY-MM-DD HH:MM"
+    assert "lagna_sign" in bi
+    assert "lagna_lord" in bi
+    assert "score" in bi
+    assert 0.0 <= bi["score"] <= 1.0
+    assert bi["lagna_sign"] in _VALID_SIGNS
+    assert bi["lagna_lord_dignity"] in _VALID_DIGNITIES
+
+    bw = body["best_window"]
+    assert bw is not None
+    assert "start" in bw
+    assert "end" in bw
+    # Window must be ≤ 11 minutes wide (band_start to band_end+1)
+    from datetime import datetime
+    s = datetime.strptime(bw["start"], "%H:%M")
+    e = datetime.strptime(bw["end"], "%H:%M")
+    width_mins = (e.hour * 60 + e.minute) - (s.hour * 60 + s.minute)
+    assert width_mins <= 11, f"Window too wide: {width_mins} min"
+
+    assert isinstance(body["top_samples"], list)
+    assert len(body["top_samples"]) <= 20
+
+
+def test_lagna_shuddhi_returns_minute_resolution():
+    r = client.post("/v1/muhurat/lagna-shuddhi", json=_LAGNA_SHUDDHI_REQ)
+    body = r.json()
+    bi = body["best_instant"]
+    # instant format is "YYYY-MM-DD HH:MM" — must resolve to a specific minute
+    parts = bi["instant"].split(" ")
+    assert len(parts) == 2
+    assert len(parts[1]) == 5  # "HH:MM"
+
+
+def test_lagna_shuddhi_best_not_in_rahu_kala():
+    """Best instant should never be inside Rahu Kala."""
+    r = client.post("/v1/muhurat/lagna-shuddhi", json=_LAGNA_SHUDDHI_REQ)
+    body = r.json()
+    bi = body["best_instant"]
+    assert not bi["in_rahu_kala"], "Best instant must not be in Rahu Kala"
+    assert not bi["in_yamaganda"], "Best instant must not be in Yamaganda"
+    assert not bi["in_gulika"], "Best instant must not be in Gulika"
+
+
+def test_lagna_shuddhi_top_samples_ordered():
+    """top_samples must be sorted by score descending."""
+    r = client.post("/v1/muhurat/lagna-shuddhi", json=_LAGNA_SHUDDHI_REQ)
+    body = r.json()
+    scores = [s["score"] for s in body["top_samples"]]
+    assert scores == sorted(scores, reverse=True), "top_samples not sorted by score desc"
+
+
+def test_lagna_shuddhi_activity_categories():
+    """All activity categories must return 200 with valid structure."""
+    for activity in ["generic", "business", "marriage", "travel", "surgery"]:
+        req = {**_LAGNA_SHUDDHI_REQ, "activity_category": activity}
+        r = client.post("/v1/muhurat/lagna-shuddhi", json=req)
+        assert r.status_code == 200, f"Failed for activity={activity}"
+        body = r.json()
+        assert body["best_instant"] is not None or body["top_samples"] == []
+
+
+def test_lagna_shuddhi_surgery_excludes_rahu_varjyam():
+    """Surgery mode: no sample in top_samples should have Rahu Kala or Varjyam."""
+    req = {**_LAGNA_SHUDDHI_REQ, "activity_category": "surgery"}
+    r = client.post("/v1/muhurat/lagna-shuddhi", json=req)
+    body = r.json()
+    for sample in body["top_samples"]:
+        assert not sample["in_rahu_kala"]
+        assert not sample["in_varjyam"]
+        assert not sample["in_durmuhurtam"]
+
+
+# ---------------------------------------------------------------------------
 # /v1/compat
 # ---------------------------------------------------------------------------
 
