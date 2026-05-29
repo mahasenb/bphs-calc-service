@@ -64,10 +64,17 @@ _ASPECTS = {
 
 
 def _jd_from_person(p: PersonalData) -> float:
+    # pyjhora's chart/drik functions (charts.rasi_chart, drik.ascendant,
+    # drik.dhasavarga, drik.planets_in_retrograde) expect a JD built from LOCAL
+    # clock time and subtract the place timezone themselves (JD_UTC = JD - tz/24,
+    # documented on drik.sidereal_longitude). Return the LOCAL JD — do NOT pre-
+    # subtract the timezone, or every planet longitude is computed tz hours early
+    # (double subtraction), shifting the Moon's nakshatra pada and corrupting the
+    # Vimshottari dasha balance. swisseph calls that need true UT derive it via
+    # jd - tz/24 at the call site (see _compute).
     naive = datetime.combine(p.birth_date, p.birth_time)
-    utc_hour = (naive.hour + naive.minute / 60 + naive.second / 3600
-                - p.timezone_offset_hours)
-    return swe.julday(naive.year, naive.month, naive.day, utc_hour)
+    local_hour = naive.hour + naive.minute / 60 + naive.second / 3600
+    return swe.julday(naive.year, naive.month, naive.day, local_hour)
 
 
 def _compute_house(lon: float, house_cusps: list[float]) -> int:
@@ -153,23 +160,25 @@ class Chart:
 
     def _compute(self):
         drik.set_ayanamsa_mode('LAHIRI')
-        jd = _jd_from_person(self.person)
+        jd = _jd_from_person(self.person)  # LOCAL JD — pyjhora subtracts tz itself
+        jd_utc = jd - self.person.timezone_offset_hours / 24.0  # true UT for swisseph
         place = utils.make_place(self.person.name, self.person.latitude, self.person.longitude, self.person.timezone_offset_hours)
         ayanamsa = drik.get_ayanamsa_value(jd)
 
-        # Planetary positions come from pyjhora (it reads jd as UT — correct).
+        # Planetary positions come from pyjhora, which expects a LOCAL jd and
+        # subtracts the place timezone internally (JD_UTC = JD - tz).
         rasi_positions = charts.rasi_chart(jd, place)
         retro_planets = drik.planets_in_retrograde(jd, place)
 
         # Ascendant/lagna is computed directly from swisseph's ascmc[0]. pyjhora's
-        # rasi_chart()[0] mis-handles the timezone (it treats jd as local and
-        # re-subtracts place.timezone), producing a lagna offset by the tz; its
-        # planet longitudes are unaffected. ascmc[0] is the true ascendant and is
-        # independent of the chosen house system. (Same method as lagna_shuddhi.py.)
+        # rasi_chart()[0] subtracts the timezone a second time internally, so its
+        # lagna lands tz hours off; swisseph.houses takes true UT (jd_utc) and
+        # ascmc[0] is the correct ascendant, independent of the house system.
+        # (Same method as lagna_shuddhi.py.)
         try:
-            cusps, ascmc = swe.houses(jd, self.person.latitude, self.person.longitude, b"P")
+            cusps, ascmc = swe.houses(jd_utc, self.person.latitude, self.person.longitude, b"P")
         except Exception:
-            cusps, ascmc = swe.houses(jd, self.person.latitude, self.person.longitude, b"E")
+            cusps, ascmc = swe.houses(jd_utc, self.person.latitude, self.person.longitude, b"E")
 
         sid_asc = (ascmc[0] - ayanamsa) % 360
         lagna_sign_index = int(sid_asc // 30)
@@ -233,7 +242,7 @@ class Chart:
             ayanamsa_value=round(ayanamsa, 6),
             house_cusps=whole_sign_cusps,
             chalit_cusps=chalit_cusps,
-            jd=jd,
+            jd=jd_utc,
         )
 
     def snapshot(self) -> ChartSnapshot:
