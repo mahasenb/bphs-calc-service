@@ -153,8 +153,10 @@ class ProfileResponse(BaseModel):
     avkahada: dict               # Varna, Yoni, Gana, Vasya, Nadi
     kalsarp: dict                # present, name, partial, rahu_house
     sade_sati_lifetime: list     # [{phase, start, end}, ...]
-    numerology: dict             # {radical, destiny}
-    favourable: dict             # lucky_number, lucky_metal, lucky_stone, lucky_color
+    numerology: dict             # {radical, destiny, name}
+    favourable: dict             # lucky_number, lucky_metal, lucky_stone, lucky_color, good_years
+    janma_nakshatra: dict        # deity, symbol, ruling_planet, tattva, purushartha, pada
+    mangal_dosha: dict           # present, severity, cancellation, from_moon, mars_house
 
 
 # --- Meta ---

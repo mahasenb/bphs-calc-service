@@ -19,6 +19,7 @@ from .compat import (
     _VARNA_NAMES,
     _VASYA_GROUP,
     _nakshatra_nadi,
+    _mangal_dosha_raw,
 )
 from . import utils
 
@@ -28,6 +29,101 @@ _NAK_LORDS = [
     "Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury",
     "Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Janma Nakshatra static metadata (27 nakshatras, BPHS / classical tables)
+# ---------------------------------------------------------------------------
+
+# Proper nouns (deity names, animal names, Sanskrit terms) kept transliterated —
+# untranslated across locales by design. Interpretation prose is the LLM's job.
+JANMA_NAKSHATRA_DATA: dict[str, dict] = {
+    "Ashwini":           {"deity": "Ashwini Kumaras", "symbol": "Horse's head",        "ruling_planet": "Ketu",    "tattva": "Fire",  "purushartha": "Dharma",  "body_part": "Knees",           "nature": "Light / Swift (Laghu/Kshipra)"},
+    "Bharani":           {"deity": "Yama",            "symbol": "Yoni (womb)",          "ruling_planet": "Venus",   "tattva": "Earth", "purushartha": "Artha",   "body_part": "Head",            "nature": "Fierce / Severe (Ugra)"},
+    "Krittika":          {"deity": "Agni",            "symbol": "Razor / flame",        "ruling_planet": "Sun",     "tattva": "Fire",  "purushartha": "Kama",    "body_part": "Eyes",            "nature": "Mixed (Mishra)"},
+    "Rohini":            {"deity": "Brahma / Prajapati", "symbol": "Chariot / temple",  "ruling_planet": "Moon",    "tattva": "Earth", "purushartha": "Moksha",  "body_part": "Forehead / legs", "nature": "Fixed (Dhruva)"},
+    "Mrigashira":        {"deity": "Soma (Moon)",     "symbol": "Deer's head",          "ruling_planet": "Mars",    "tattva": "Air",   "purushartha": "Moksha",  "body_part": "Eyes / eyebrows", "nature": "Soft / Mild (Mridu)"},
+    "Ardra":             {"deity": "Rudra",           "symbol": "Teardrop / diamond",   "ruling_planet": "Rahu",    "tattva": "Air",   "purushartha": "Kama",    "body_part": "Hair / arms",     "nature": "Sharp / Intense (Tikshna)"},
+    "Punarvasu":         {"deity": "Aditi",           "symbol": "Bow / quiver",         "ruling_planet": "Jupiter", "tattva": "Water", "purushartha": "Artha",   "body_part": "Nose / fingers",  "nature": "Movable (Chara)"},
+    "Pushya":            {"deity": "Brihaspati",      "symbol": "Flower / circle",      "ruling_planet": "Saturn",  "tattva": "Water", "purushartha": "Dharma",  "body_part": "Face / mouth",    "nature": "Light / Swift (Laghu/Kshipra)"},
+    "Ashlesha":          {"deity": "Sarpa (serpent)", "symbol": "Coiled serpent",       "ruling_planet": "Mercury", "tattva": "Water", "purushartha": "Dharma",  "body_part": "Ears / joints",   "nature": "Sharp / Intense (Tikshna)"},
+    "Magha":             {"deity": "Pitrs (ancestors)", "symbol": "Throne / palanquin", "ruling_planet": "Ketu",    "tattva": "Fire",  "purushartha": "Artha",   "body_part": "Nose / lips",     "nature": "Fierce / Severe (Ugra)"},
+    "Purva Phalguni":    {"deity": "Bhaga",           "symbol": "Front legs of cot",    "ruling_planet": "Venus",   "tattva": "Fire",  "purushartha": "Kama",    "body_part": "Right hand",      "nature": "Fierce / Severe (Ugra)"},
+    "Uttara Phalguni":   {"deity": "Aryaman",         "symbol": "Back legs of cot",     "ruling_planet": "Sun",     "tattva": "Earth", "purushartha": "Moksha",  "body_part": "Left hand",       "nature": "Fixed (Dhruva)"},
+    "Hasta":             {"deity": "Savitur (Sun)",   "symbol": "Open hand",            "ruling_planet": "Moon",    "tattva": "Earth", "purushartha": "Moksha",  "body_part": "Hands / fingers", "nature": "Light / Swift (Laghu/Kshipra)"},
+    "Chitra":            {"deity": "Vishvakarman",    "symbol": "Shining jewel / pearl","ruling_planet": "Mars",    "tattva": "Fire",  "purushartha": "Kama",    "body_part": "Forehead / neck", "nature": "Soft / Mild (Mridu)"},
+    "Swati":             {"deity": "Vayu",            "symbol": "Coral / sword",        "ruling_planet": "Rahu",    "tattva": "Air",   "purushartha": "Artha",   "body_part": "Chest / skin",    "nature": "Movable (Chara)"},
+    "Vishakha":          {"deity": "Indra-Agni",      "symbol": "Triumphal arch",       "ruling_planet": "Jupiter", "tattva": "Fire",  "purushartha": "Dharma",  "body_part": "Arms / breast",   "nature": "Mixed (Mishra)"},
+    "Anuradha":          {"deity": "Mitra",           "symbol": "Lotus / staff",        "ruling_planet": "Saturn",  "tattva": "Water", "purushartha": "Dharma",  "body_part": "Stomach",         "nature": "Soft / Mild (Mridu)"},
+    "Jyeshtha":          {"deity": "Indra",           "symbol": "Circular amulet / umbrella", "ruling_planet": "Mercury", "tattva": "Water", "purushartha": "Artha", "body_part": "Tongue / right side", "nature": "Sharp / Intense (Tikshna)"},
+    "Mula":              {"deity": "Nirriti / Alakshmi", "symbol": "Root tied together", "ruling_planet": "Ketu",   "tattva": "Fire",  "purushartha": "Kama",    "body_part": "Feet / left side","nature": "Sharp / Intense (Tikshna)"},
+    "Purva Ashadha":     {"deity": "Apas (water)",   "symbol": "Elephant tusk / fan",  "ruling_planet": "Venus",   "tattva": "Air",   "purushartha": "Moksha",  "body_part": "Thighs / back",   "nature": "Fierce / Severe (Ugra)"},
+    "Uttara Ashadha":    {"deity": "Vishwadevas",     "symbol": "Elephant tusk / planks","ruling_planet": "Sun",    "tattva": "Earth", "purushartha": "Moksha",  "body_part": "Thighs / waist",  "nature": "Fixed (Dhruva)"},
+    "Shravana":          {"deity": "Vishnu",          "symbol": "Ear / three footprints","ruling_planet": "Moon",   "tattva": "Air",   "purushartha": "Artha",   "body_part": "Ears / genitals", "nature": "Movable (Chara)"},
+    "Dhanishta":         {"deity": "Ashta Vasus",     "symbol": "Drum / flute",         "ruling_planet": "Mars",    "tattva": "Air",   "purushartha": "Dharma",  "body_part": "Back / anus",     "nature": "Movable (Chara)"},
+    "Shatabhisha":       {"deity": "Varuna",          "symbol": "Empty circle / 100 stars","ruling_planet": "Rahu", "tattva": "Air",   "purushartha": "Artha",   "body_part": "Right thigh / jaw","nature": "Movable (Chara)"},
+    "Purva Bhadrapada":  {"deity": "Aja Ekapada",     "symbol": "Swords / two front legs of funeral cot","ruling_planet": "Jupiter", "tattva": "Air", "purushartha": "Artha", "body_part": "Ribs / sides", "nature": "Fierce / Severe (Ugra)"},
+    "Uttara Bhadrapada": {"deity": "Ahir Budhanya",   "symbol": "Twins / back legs of funeral cot","ruling_planet": "Saturn", "tattva": "Water", "purushartha": "Kama", "body_part": "Shins / sides", "nature": "Fixed (Dhruva)"},
+    "Revati":            {"deity": "Pushan",          "symbol": "Fish / drum",          "ruling_planet": "Mercury", "tattva": "Water", "purushartha": "Moksha",  "body_part": "Feet / abdomen",  "nature": "Soft / Mild (Mridu)"},
+}
+
+
+def janma_nakshatra(snapshot: ChartSnapshot) -> dict:
+    """Return Moon nakshatra with metadata + pada (1–4).
+
+    Pada is computed from the Moon's fractional position within the nakshatra
+    (each nakshatra = 13°20' = 4 padas of 3°20' each).
+    """
+    moon = snapshot.rasi_chart.get("Moon")
+    if not moon:
+        return {}
+    nak = moon.nakshatra
+    meta = dict(JANMA_NAKSHATRA_DATA.get(nak, {}))
+    meta["nakshatra"] = nak
+
+    # Compute pada (1–4) from Moon's absolute longitude
+    try:
+        moon_lon = utils.SIGNS.index(moon.sign) * 30 + moon.degrees
+        nak_idx = int(moon_lon / (360 / 27))
+        nak_start = nak_idx * (360 / 27)
+        offset = moon_lon - nak_start
+        pada = int(offset / (360 / 27 / 4)) + 1  # 1–4
+        meta["pada"] = min(pada, 4)
+    except (ValueError, ZeroDivisionError):
+        meta["pada"] = None
+
+    return meta
+
+
+# ---------------------------------------------------------------------------
+# Single-chart Mangal Dosha
+# ---------------------------------------------------------------------------
+
+def mangal_dosha(snapshot: ChartSnapshot) -> dict:
+    """Single-chart Mangal Dosha: checks from lagna and from Moon.
+
+    Reuses the pair-compatibility raw checker from compat.py.
+    """
+    has_d, sev_d, cancel_d = _mangal_dosha_raw(snapshot)
+
+    # Also check from Moon's chart (Moon treated as lagna)
+    moon = snapshot.rasi_chart.get("Moon")
+    mars = snapshot.rasi_chart.get("Mars")
+    from_moon = False
+    if moon and mars:
+        # Mars houses from Moon: 1/2/4/7/8/12
+        moon_idx = utils.SIGNS.index(moon.sign)
+        mars_idx = utils.SIGNS.index(mars.sign)
+        mars_house_from_moon = (mars_idx - moon_idx) % 12 + 1
+        from_moon = mars_house_from_moon in {1, 2, 4, 7, 8, 12}
+
+    return {
+        "present": has_d,
+        "severity": sev_d,
+        "cancellation": cancel_d[0] if cancel_d else None,
+        "from_moon": from_moon,
+        "mars_house": mars.house if mars else None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -219,17 +315,36 @@ def _reduce(n: int) -> int:
     return n
 
 
-def numerology(birth_date: date) -> dict:
-    """Radical (Mulank) and Destiny (Bhagyank) numbers.
+# Chaldean letter-to-digit mapping (classical numerology)
+_CHALDEAN: dict[str, int] = {
+    "a": 1, "i": 1, "j": 1, "q": 1, "y": 1,
+    "b": 2, "k": 2, "r": 2,
+    "c": 3, "g": 3, "l": 3, "s": 3,
+    "d": 4, "m": 4, "t": 4,
+    "e": 5, "h": 5, "n": 5, "x": 5,
+    "u": 6, "v": 6, "w": 6,
+    "o": 7, "z": 7,
+    "f": 8, "p": 8,
+}
+
+
+def numerology(birth_date: date, name: str = "") -> dict:
+    """Radical (Mulank), Destiny (Bhagyank), and Chaldean Name number.
 
     Radical = digit sum of day, reduced to 1–9.
     Destiny = digit sum of full date (DDMMYYYY), reduced to 1–9.
+    Name    = Chaldean digit sum of consonants+vowels in the name, reduced 1–9.
     """
     radical = _reduce(sum(int(d) for d in str(birth_date.day)))
     destiny = _reduce(sum(int(d) for d in str(birth_date.day)
                          + str(birth_date.month)
                          + str(birth_date.year)))
-    return {"radical": radical, "destiny": destiny}
+    name_number: int | None = None
+    if name.strip():
+        letters = [c.lower() for c in name if c.isalpha()]
+        total = sum(_CHALDEAN.get(c, 0) for c in letters)
+        name_number = _reduce(total) if total else None
+    return {"radical": radical, "destiny": destiny, "name": name_number}
 
 
 # ---------------------------------------------------------------------------
@@ -249,17 +364,22 @@ _LAGNA_LORD_PROFILE: dict[str, dict] = {
 }
 
 
-def favourable_points(snapshot: ChartSnapshot) -> dict:
-    """Return lucky number / metal / stone / color based on the Janma-rasi lord.
+def favourable_points(snapshot: ChartSnapshot, radical: int = 1) -> dict:
+    """Return lucky number / metal / stone / color + auspicious years.
 
-    Auspicious metal/gemstone are keyed on the lord of the Moon's sign (Janma
-    rashi), the classical "lucky gem" rule — e.g. a Cancer Moon (lord Moon)
-    yields Silver / Pearl. Falls back to the lagna lord if the Moon is absent.
+    Keyed on Moon's sign lord (Janma rashi). Auspicious years = ages whose
+    year-of-age digit-sum reduces to the lucky number (first 10 such ages).
     """
     moon = snapshot.rasi_chart.get("Moon")
     rasi_lord = utils.get_sign_lord(moon.sign) if moon else snapshot.lagna_lord
     profile = dict(_LAGNA_LORD_PROFILE.get(rasi_lord, {}))
     profile["rasi_lord"] = rasi_lord
+
+    # Good years: ages 1–100 where age-digit-sum == lucky_number
+    lucky = profile.get("lucky_number", radical)
+    good_ages = [a for a in range(1, 100) if _reduce(a) == lucky]
+    profile["good_years"] = good_ages[:10]   # first 10 auspicious ages
+
     return profile
 
 
@@ -267,11 +387,15 @@ def favourable_points(snapshot: ChartSnapshot) -> dict:
 # Composite profile — single entry point
 # ---------------------------------------------------------------------------
 
-def compute_profile(snapshot: ChartSnapshot, birth_date: date) -> dict:
+def compute_profile(snapshot: ChartSnapshot, birth_date: date, name: str = "") -> dict:
+    num = numerology(birth_date, name)
+    fav = favourable_points(snapshot, radical=num.get("radical", 1))
     return {
-        "avkahada":    avkahada_chakra(snapshot),
-        "kalsarp":     kalsarp_dosh(snapshot),
+        "avkahada":           avkahada_chakra(snapshot),
+        "kalsarp":            kalsarp_dosh(snapshot),
         "sade_sati_lifetime": sade_sati_lifetime(snapshot, birth_date),
-        "numerology":  numerology(birth_date),
-        "favourable":  favourable_points(snapshot),
+        "numerology":         num,
+        "favourable":         fav,
+        "janma_nakshatra":    janma_nakshatra(snapshot),
+        "mangal_dosha":       mangal_dosha(snapshot),
     }

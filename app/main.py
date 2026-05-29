@@ -266,7 +266,7 @@ def special_points_endpoint(p: PersonalDataIn):
 def profile_endpoint(p: PersonalDataIn):
     from bphs_core.profile import compute_profile
     _, s = _get_chart(p)
-    result = compute_profile(s, p.birth_date)
+    result = compute_profile(s, p.birth_date, name=p.name)
     return ProfileResponse(**result)
 
 
