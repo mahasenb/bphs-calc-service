@@ -122,6 +122,28 @@ class TestAuthBranches:
                 os.environ["CALC_SERVICE_TOKEN"] = "test"
             importlib.reload(auth_mod)
 
+    def test_unset_token_fails_closed_in_non_dev(self):
+        """Branch: non-dev env + unset token → import-time RuntimeError (fail closed)."""
+        import importlib
+        import app.auth as auth_mod
+
+        old_token = os.environ.pop("CALC_SERVICE_TOKEN", None)
+        old_env = os.environ.get("ENVIRONMENT")
+        os.environ["ENVIRONMENT"] = "production"
+        try:
+            with pytest.raises(RuntimeError):
+                importlib.reload(auth_mod)
+        finally:
+            if old_env is None:
+                os.environ.pop("ENVIRONMENT", None)
+            else:
+                os.environ["ENVIRONMENT"] = old_env
+            if old_token is not None:
+                os.environ["CALC_SERVICE_TOKEN"] = old_token
+            else:
+                os.environ["CALC_SERVICE_TOKEN"] = "test"
+            importlib.reload(auth_mod)
+
     def test_valid_token_accepted(self):
         r = client.post("/v1/chart", json=SAMPLE_A)
         assert r.status_code == 200
