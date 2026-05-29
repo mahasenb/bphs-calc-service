@@ -358,8 +358,10 @@ class TestTransitsEndpoint:
         r = client.post("/v1/transits", json=self._req("2025-01-01"))
         assert r.status_code == 200
         body = r.json()
-        assert body["saturn_sign"] in _VALID_SIGNS
-        assert body["jupiter_sign"] in _VALID_SIGNS
+        saturn = next(p for p in body["planets"] if p["planet"] == "Saturn")
+        jupiter = next(p for p in body["planets"] if p["planet"] == "Jupiter")
+        assert saturn["sign"] in _VALID_SIGNS
+        assert jupiter["sign"] in _VALID_SIGNS
 
 
 # ===========================================================================

@@ -136,7 +136,8 @@ def test_transits_sample_a():
     r = client.post("/v1/transits", json=req)
     assert r.status_code == 200
     body = r.json()
-    assert "saturn_sign" in body
+    saturn = next(p for p in body["planets"] if p["planet"] == "Saturn")
+    assert saturn["sign"] in _VALID_SIGNS
     assert "sade_sati_active" in body
 
 
