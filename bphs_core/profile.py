@@ -250,10 +250,16 @@ _LAGNA_LORD_PROFILE: dict[str, dict] = {
 
 
 def favourable_points(snapshot: ChartSnapshot) -> dict:
-    """Return lucky number / metal / stone / color based on lagna lord."""
-    lord = snapshot.lagna_lord
-    profile = dict(_LAGNA_LORD_PROFILE.get(lord, {}))
-    profile["lagna_lord"] = lord
+    """Return lucky number / metal / stone / color based on the Janma-rasi lord.
+
+    Auspicious metal/gemstone are keyed on the lord of the Moon's sign (Janma
+    rashi), the classical "lucky gem" rule — e.g. a Cancer Moon (lord Moon)
+    yields Silver / Pearl. Falls back to the lagna lord if the Moon is absent.
+    """
+    moon = snapshot.rasi_chart.get("Moon")
+    rasi_lord = utils.get_sign_lord(moon.sign) if moon else snapshot.lagna_lord
+    profile = dict(_LAGNA_LORD_PROFILE.get(rasi_lord, {}))
+    profile["rasi_lord"] = rasi_lord
     return profile
 
 

@@ -15,6 +15,24 @@ def _sign_and_deg(lon: float) -> tuple[str, float]:
     return utils.longitude_to_sign_and_degree(lon % 360)
 
 
+def _nth_house_from(house: int, n: int) -> int:
+    """The n-th house counted from `house` (inclusive, 1-based, wraps 1..12)."""
+    return ((house - 1 + n - 1) % 12) + 1
+
+
+def _arudha_pada_house(lord_house: int) -> int:
+    """Arudha pada house for a bhava, given the bhava lord's house measured from
+    that bhava. The pada sits as far from the lord as the lord is from the bhava.
+
+    BPHS/Jaimini exception: if the pada lands in the 1st or 7th from the bhava,
+    the 10th house from the pada is taken (1st -> 10th, 7th -> 4th).
+    """
+    pada = ((2 * lord_house - 1) - 1) % 12 + 1
+    if pada in (1, 7):
+        pada = _nth_house_from(pada, 10)
+    return pada
+
+
 def get_arudha_lagna(snapshot: ChartSnapshot) -> SpecialPoint:
     """Arudha = 2 × lagna-lord-house − lagna house (counted from lagna)."""
     lagna_sign = snapshot.lagna
@@ -25,11 +43,7 @@ def get_arudha_lagna(snapshot: ChartSnapshot) -> SpecialPoint:
         sign, deg = lagna_sign, 0.0
     else:
         lord_house = lord_pd.house
-        arudha_house = ((2 * lord_house - 1) - 1) % 12 + 1
-        if arudha_house == lord_house:
-            arudha_house = ((arudha_house + 10 - 1) % 12) + 1
-        if arudha_house in (1, 7):
-            arudha_house = 10
+        arudha_house = _arudha_pada_house(lord_house)
         arudha_sign_idx = (lagna_idx + arudha_house - 1) % 12
         sign = utils.SIGNS[arudha_sign_idx]
         deg = 0.0
@@ -54,7 +68,7 @@ def get_upapada(snapshot: ChartSnapshot) -> SpecialPoint:
         sign = twelfth_sign
     else:
         lord_house_from_12th = ((lord_pd.house - 12) % 12) + 1
-        upapada_house_from_12th = ((2 * lord_house_from_12th - 1) - 1) % 12 + 1
+        upapada_house_from_12th = _arudha_pada_house(lord_house_from_12th)
         upapada_sign_idx = (twelfth_sign_idx + upapada_house_from_12th - 1) % 12
         sign = utils.SIGNS[upapada_sign_idx]
 

@@ -19,12 +19,6 @@ _NAISARGIKA: dict[str, float] = {
     "Mercury": 25.71, "Mars": 17.14, "Saturn": 8.57,
 }
 
-# BPHS exaltation degrees (tropical index for reference, sidereal approximation)
-_EXALT_DEG: dict[str, float] = {
-    "Sun": 10.0, "Moon": 33.0, "Mars": 298.0, "Mercury": 165.0,
-    "Jupiter": 95.0, "Venus": 357.0, "Saturn": 200.0,
-}
-
 
 @dataclass
 class ShadbalaResult:
@@ -196,57 +190,122 @@ def compute_all_bhavabala(snapshot: ChartSnapshot) -> list[BhavabalaResult]:
     return results
 
 
-def compute_ashtakavarga(snapshot: ChartSnapshot,
-                         planet: str | None = None) -> dict:
-    """
-    Simplified Ashtakavarga: each planet contributes 1 point to each sign
-    based on classical benefic positions from each of the 8 reference points
-    (7 planets + lagna). Full table per BPHS chapter 66.
-    Returns binna (individual) and samudaya (aggregate) scores per sign.
-    """
-    signs = utils.SIGNS
-    # benefic sign offsets from each planet's position (1-based house offsets)
-    BENEFIC_OFFSETS = {
+# Bhinnashtakavarga benefic places per BPHS chapter 66 (Parashara).
+# For each planet's own ashtakavarga, every reference point (the 7 planets plus
+# the Lagna) contributes a bindu to specific houses counted *from that reference
+# point*. A planet's BAV is the sum of bindus from all 8 reference points (0-8
+# per sign). Per-planet BAV totals: Sun 48, Moon 49, Mars 39, Mercury 54,
+# Jupiter 56, Venus 52, Saturn 39; SAV (sum of the 7) = 337.
+_ASHTAKAVARGA_BENEFICS: dict[str, dict[str, list[int]]] = {
+    "Sun": {
         "Sun":     [1, 2, 4, 7, 8, 9, 10, 11],
         "Moon":    [3, 6, 10, 11],
-        "Mars":    [1, 2, 4, 7, 8, 10, 11],
-        "Mercury": [1, 3, 5, 6, 9, 10, 11, 12],
-        "Jupiter": [1, 2, 3, 4, 7, 8, 10, 11],
-        "Venus":   [1, 2, 3, 4, 5, 8, 9, 11, 12],
+        "Mars":    [1, 2, 4, 7, 8, 9, 10, 11],
+        "Mercury": [3, 5, 6, 9, 10, 11, 12],
+        "Jupiter": [5, 6, 9, 11],
+        "Venus":   [6, 7, 12],
+        "Saturn":  [1, 2, 4, 7, 8, 9, 10, 11],
+        "Lagna":   [3, 4, 6, 10, 11, 12],
+    },
+    "Moon": {
+        "Sun":     [3, 6, 7, 8, 10, 11],
+        "Moon":    [1, 3, 6, 7, 10, 11],
+        "Mars":    [2, 3, 5, 6, 9, 10, 11],
+        "Mercury": [1, 3, 4, 5, 7, 8, 10, 11],
+        "Jupiter": [1, 4, 7, 8, 10, 11, 12],
+        "Venus":   [3, 4, 5, 7, 9, 10, 11],
         "Saturn":  [3, 5, 6, 11],
         "Lagna":   [3, 6, 10, 11],
-    }
+    },
+    "Mars": {
+        "Sun":     [3, 5, 6, 10, 11],
+        "Moon":    [3, 6, 11],
+        "Mars":    [1, 2, 4, 7, 8, 10, 11],
+        "Mercury": [3, 5, 6, 11],
+        "Jupiter": [6, 10, 11, 12],
+        "Venus":   [6, 8, 11, 12],
+        "Saturn":  [1, 4, 7, 8, 9, 10, 11],
+        "Lagna":   [1, 3, 6, 10, 11],
+    },
+    "Mercury": {
+        "Sun":     [5, 6, 9, 11, 12],
+        "Moon":    [2, 4, 6, 8, 10, 11],
+        "Mars":    [1, 2, 4, 7, 8, 9, 10, 11],
+        "Mercury": [1, 3, 5, 6, 9, 10, 11, 12],
+        "Jupiter": [6, 8, 11, 12],
+        "Venus":   [1, 2, 3, 4, 5, 8, 9, 11],
+        "Saturn":  [1, 2, 4, 7, 8, 9, 10, 11],
+        "Lagna":   [1, 2, 4, 6, 8, 10, 11],
+    },
+    "Jupiter": {
+        "Sun":     [1, 2, 3, 4, 7, 8, 9, 10, 11],
+        "Moon":    [2, 5, 7, 9, 11],
+        "Mars":    [1, 2, 4, 7, 8, 10, 11],
+        "Mercury": [1, 2, 4, 5, 6, 9, 10, 11],
+        "Jupiter": [1, 2, 3, 4, 7, 8, 10, 11],
+        "Venus":   [2, 5, 6, 9, 10, 11],
+        "Saturn":  [3, 5, 6, 12],
+        "Lagna":   [1, 2, 4, 5, 6, 7, 9, 10, 11],
+    },
+    "Venus": {
+        "Sun":     [8, 11, 12],
+        "Moon":    [1, 2, 3, 4, 5, 8, 9, 11, 12],
+        "Mars":    [3, 5, 6, 9, 11, 12],
+        "Mercury": [3, 5, 6, 9, 11],
+        "Jupiter": [5, 8, 9, 10, 11],
+        "Venus":   [1, 2, 3, 4, 5, 8, 9, 10, 11],
+        "Saturn":  [3, 4, 5, 8, 9, 10, 11],
+        "Lagna":   [1, 2, 3, 4, 5, 8, 9, 11],
+    },
+    "Saturn": {
+        "Sun":     [1, 2, 4, 7, 8, 10, 11],
+        "Moon":    [3, 6, 11],
+        "Mars":    [3, 5, 6, 10, 11, 12],
+        "Mercury": [6, 8, 9, 10, 11, 12],
+        "Jupiter": [5, 6, 11, 12],
+        "Venus":   [6, 11, 12],
+        "Saturn":  [3, 5, 6, 11],
+        "Lagna":   [1, 3, 4, 6, 10, 11],
+    },
+}
 
-    planet_signs: dict[str, int] = {
+_ASHTAKAVARGA_PLANETS = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"]
+
+
+def compute_ashtakavarga(snapshot: ChartSnapshot,
+                         planet: str | None = None) -> dict:
+    """Bhinnashtakavarga (per-planet) and Sarvashtakavarga bindus per sign.
+
+    For each of the 7 planets, bindus are accumulated from all 8 reference points
+    (the 7 planets + the Lagna) per the BPHS chapter 66 benefic-place tables.
+    The Lagna is a reference point *inside* each planet's varga, never a separate
+    binna column, so the SAV (samudaya) is the sum of the 7 planetary BAVs.
+
+    Returns {"binna": {planet: {sign: bindus}}, "samudaya": {sign: bindus}}, or
+    when ``planet`` is given, {"binna": {sign: bindus}, "samudaya": {sign: bindus}}.
+    """
+    signs = utils.SIGNS
+
+    ref_idx: dict[str, int] = {
         name: utils.SIGNS.index(pd.sign)
         for name, pd in snapshot.rasi_chart.items()
     }
-    lagna_idx = utils.SIGNS.index(snapshot.lagna)
+    ref_idx["Lagna"] = utils.SIGNS.index(snapshot.lagna)
 
     binna: dict[str, dict[str, int]] = {}
     samudaya = [0] * 12
 
-    ref_planets = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"]
-    for ref in ref_planets:
-        ref_idx = planet_signs.get(ref, 0)
-        offsets = BENEFIC_OFFSETS.get(ref, [])
+    for p in _ASHTAKAVARGA_PLANETS:
         scores = [0] * 12
-        for offset in offsets:
-            target = (ref_idx + offset - 1) % 12
-            scores[target] = 1
-        binna[ref] = {signs[i]: scores[i] for i in range(12)}
+        for ref, houses in _ASHTAKAVARGA_BENEFICS[p].items():
+            base = ref_idx.get(ref)
+            if base is None:
+                continue
+            for house in houses:
+                scores[(base + house - 1) % 12] += 1
+        binna[p] = {signs[i]: scores[i] for i in range(12)}
         for i in range(12):
             samudaya[i] += scores[i]
-
-    # Lagna contribution
-    lagna_offsets = BENEFIC_OFFSETS["Lagna"]
-    lagna_scores = [0] * 12
-    for offset in lagna_offsets:
-        target = (lagna_idx + offset - 1) % 12
-        lagna_scores[target] = 1
-    binna["Lagna"] = {signs[i]: lagna_scores[i] for i in range(12)}
-    for i in range(12):
-        samudaya[i] += lagna_scores[i]
 
     sav = {signs[i]: samudaya[i] for i in range(12)}
 
