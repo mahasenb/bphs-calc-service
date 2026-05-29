@@ -84,6 +84,7 @@ def _pd_to_schema(pd: PlanetData) -> PlanetPlacement:
         gandanta_proximity_degrees=gandanta_proximity if is_gandanta else None,
         is_combust=pd.is_combust,
         combust_proximity_degrees=pd.combust_proximity_degrees,
+        chalit_house=pd.chalit_house,
     )
 
 
@@ -94,6 +95,7 @@ def _chart_to_response(s: ChartSnapshot) -> ChartResponse:
     return ChartResponse(
         lagna=s.lagna, lagna_lord=s.lagna_lord,
         ayanamsa_value=s.ayanamsa_value,
+        bhava_chalit_cusps=[round(c, 6) for c in s.chalit_cusps],
         rasi=to_list(s.rasi_chart),
         hora=to_list(s.hora_chart),
         drekkana=to_list(s.drekkana_chart),

@@ -82,6 +82,42 @@ def test_chart_deterministic():
     assert r1.json() == r2.json()
 
 
+_SIGN_ORDER = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+]
+
+
+def test_chart_houses_are_whole_sign():
+    """Primary `house` must be BPHS whole-sign: house == sign counted from the
+    lagna sign. Regression guard against the Placidus-cusp house assignment."""
+    r = client.post("/v1/chart", json=SAMPLE_A)
+    assert r.status_code == 200
+    body = r.json()
+    lagna_idx = _SIGN_ORDER.index(body["lagna"])
+    for p in body["rasi"]:
+        expected = (_SIGN_ORDER.index(p["sign"]) - lagna_idx) % 12 + 1
+        assert p["house"] == expected, (
+            f"{p['planet']} in {p['sign']} (lagna {body['lagna']}): "
+            f"whole-sign house should be {expected}, got {p['house']}"
+        )
+
+
+def test_chart_exposes_bhava_chalit_secondary():
+    """Bhava-Chalit is exposed as secondary cusp-based data: 12 cusps plus a
+    per-planet chalit_house in 1..12 — without disturbing the whole-sign house."""
+    r = client.post("/v1/chart", json=SAMPLE_A)
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["bhava_chalit_cusps"]) == 12
+    for c in body["bhava_chalit_cusps"]:
+        assert 0.0 <= c < 360.0
+    for p in body["rasi"]:
+        assert p["chalit_house"] in range(1, 13), (
+            f"{p['planet']} chalit_house out of range: {p['chalit_house']}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # /v1/strength
 # ---------------------------------------------------------------------------

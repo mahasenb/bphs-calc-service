@@ -25,12 +25,13 @@ class PlanetData:
     degrees: float
     nakshatra: str
     dignity: str
-    house: int
+    house: int                       # primary BPHS whole-sign house (from lagna sign)
     conjunctions: list[str]
     aspects: list[str]
     is_retrograde: bool
     is_combust: bool = False
     combust_proximity_degrees: Optional[float] = None
+    chalit_house: Optional[int] = None   # secondary Bhava-Chalit (Placidus cusp) house
 
 
 @dataclass
@@ -49,7 +50,8 @@ class ChartSnapshot:
     lagna: str
     lagna_lord: str
     ayanamsa_value: float
-    house_cusps: list[float] = field(default_factory=list)
+    house_cusps: list[float] = field(default_factory=list)   # whole-sign cusps (sign starts from lagna)
+    chalit_cusps: list[float] = field(default_factory=list)   # sidereal Placidus cusps (Bhava-Chalit)
     jd: float = 0.0
 
 
@@ -155,21 +157,36 @@ class Chart:
         place = utils.make_place(self.person.name, self.person.latitude, self.person.longitude, self.person.timezone_offset_hours)
         ayanamsa = drik.get_ayanamsa_value(jd)
 
-        # House cusps using swisseph directly as in original codebase
+        # Planetary positions come from pyjhora (it reads jd as UT — correct).
+        rasi_positions = charts.rasi_chart(jd, place)
+        retro_planets = drik.planets_in_retrograde(jd, place)
+
+        # Ascendant/lagna is computed directly from swisseph's ascmc[0]. pyjhora's
+        # rasi_chart()[0] mis-handles the timezone (it treats jd as local and
+        # re-subtracts place.timezone), producing a lagna offset by the tz; its
+        # planet longitudes are unaffected. ascmc[0] is the true ascendant and is
+        # independent of the chosen house system. (Same method as lagna_shuddhi.py.)
         try:
             cusps, ascmc = swe.houses(jd, self.person.latitude, self.person.longitude, b"P")
         except Exception:
             cusps, ascmc = swe.houses(jd, self.person.latitude, self.person.longitude, b"E")
 
-        # Adjust cusps to sidereal
-        sid_cusps = [((c - ayanamsa) % 360) for c in cusps]
-
-        # Calculate all divisional charts via pyjhora
-        rasi_positions = charts.rasi_chart(jd, place)
-        retro_planets = drik.planets_in_retrograde(jd, place)
-
-        lagna_sign_index, _ = rasi_positions[0][1]
+        sid_asc = (ascmc[0] - ayanamsa) % 360
+        lagna_sign_index = int(sid_asc // 30)
         lagna_sign = utils.SIGNS[lagna_sign_index]
+
+        # Replace pyjhora's tz-broken ascendant (index 0) with the correct one so
+        # every divisional chart derives its varga-lagna from the true ascendant.
+        rasi_positions[0] = (rasi_positions[0][0], (lagna_sign_index, sid_asc % 30))
+
+        # Primary houses are BPHS whole-sign: each sign is one house counted from
+        # the lagna sign. house_cusps therefore holds the sidereal start-degree of
+        # each whole-sign house (consumed as house->sign by yogas.py / strength.py).
+        whole_sign_cusps = [(((lagna_sign_index + i) % 12) * 30.0) for i in range(12)]
+
+        # Secondary Bhava-Chalit houses use the Placidus cusps (sidereal). Kept as
+        # supplementary cusp-based data; never the primary interpretation house.
+        chalit_cusps = [((c - ayanamsa) % 360) for c in cusps]
 
         # Build Rasi Chart with conjunctions and aspects
         rasi = {}
@@ -181,13 +198,15 @@ class Chart:
             dignity = utils.get_planet_dignity(name, sign)
             is_retro = pid in retro_planets
             final_lon = sign_idx * 30.0 + deg
-            house = _compute_house(final_lon, sid_cusps)
+            house = (sign_idx - lagna_sign_index) % 12 + 1
+            chalit_house = _compute_house(final_lon, chalit_cusps)
             longitudes[name] = final_lon
 
             rasi[name] = PlanetData(
                 planet=name, sign=sign, degrees=round(deg, 4),
                 nakshatra=nakshatra, dignity=dignity, house=house,
                 conjunctions=[], aspects=[], is_retrograde=is_retro,
+                chalit_house=chalit_house,
             )
 
         for name, pd in rasi.items():
@@ -212,7 +231,8 @@ class Chart:
             lagna=lagna_sign,
             lagna_lord=utils.get_sign_lord(lagna_sign),
             ayanamsa_value=round(ayanamsa, 6),
-            house_cusps=sid_cusps,
+            house_cusps=whole_sign_cusps,
+            chalit_cusps=chalit_cusps,
             jd=jd,
         )
 

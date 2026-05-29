@@ -39,12 +39,14 @@ class PlanetPlacement(BaseModel):
     gandanta_proximity_degrees: float | None = None
     is_combust: bool = False
     combust_proximity_degrees: float | None = None
+    chalit_house: int | None = None      # secondary Bhava-Chalit (Placidus cusp) house
 
 
 class ChartResponse(BaseModel):
     lagna: str
     lagna_lord: str
     ayanamsa_value: float
+    bhava_chalit_cusps: list[float] = []   # 12 sidereal Placidus cusp longitudes (Bhava-Chalit)
     rasi: list[PlanetPlacement]
     hora: list[PlanetPlacement]          # D2 — wealth/resources
     drekkana: list[PlanetPlacement]      # D3 — siblings/vitality
