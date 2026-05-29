@@ -28,13 +28,46 @@ from bphs_core import utils
 from bphs_core import compat as compat_mod
 
 
-_COMMIT = "unknown"
-try:
-    _COMMIT = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
-    ).decode().strip()
-except Exception:
-    pass
+def _resolve_version() -> str:
+    """Deterministic cache-invalidation key for the calc engine.
+
+    Prefer the git commit, but containers built without a ``.git`` directory
+    (our Dockerfile only COPYs source) make ``git rev-parse`` fail. Falling
+    back to a content hash of the calc source guarantees the value still
+    *changes whenever the calc logic changes* — which is the only property
+    the downstream ChartAnalysis cache relies on. A static "unknown" would
+    pin the cache forever and silently serve stale charts after every deploy.
+    """
+    commit = os.environ.get("GIT_COMMIT")
+    if commit:
+        return commit.strip()
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+    except Exception:
+        pass
+    try:
+        import hashlib
+
+        digest = hashlib.sha256()
+        roots = [
+            os.path.join(os.path.dirname(__file__), os.pardir, "bphs_core"),
+            os.path.dirname(__file__),
+        ]
+        for root in roots:
+            for dirpath, _dirs, files in os.walk(root):
+                for fname in sorted(files):
+                    if not fname.endswith(".py"):
+                        continue
+                    with open(os.path.join(dirpath, fname), "rb") as fh:
+                        digest.update(fh.read())
+        return "src-" + digest.hexdigest()[:16]
+    except Exception:
+        return "unknown"
+
+
+_COMMIT = _resolve_version()
 
 _ALLOWED_ORIGINS = [o for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o]
 
