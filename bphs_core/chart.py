@@ -29,6 +29,8 @@ class PlanetData:
     conjunctions: list[str]
     aspects: list[str]
     is_retrograde: bool
+    is_combust: bool = False
+    combust_proximity_degrees: Optional[float] = None
 
 
 @dataclass
@@ -91,7 +93,39 @@ def _find_aspects(planet: str, house: int,
             if p != planet and d.house in aspected_houses]
 
 
+# Combustion (astangata) orbs in degrees from the Sun (BPHS). Mercury and Venus
+# take a tighter orb when retrograde. Sun (source) and the shadow planets
+# Rahu/Ketu are never combust.
+_COMBUSTION_ORB = {
+    "Moon": 12.0, "Mars": 17.0, "Mercury": 14.0,
+    "Jupiter": 11.0, "Venus": 10.0, "Saturn": 15.0,
+}
+_COMBUSTION_ORB_RETRO = {"Mercury": 12.0, "Venus": 8.0}
+
+
+def _apply_combustion(rasi: dict[str, "PlanetData"], longitudes: dict[str, float]) -> None:
+    """Flag planets within the Sun's combustion orb. Mutates PlanetData in place."""
+    sun_lon = longitudes.get("Sun")
+    if sun_lon is None:
+        return
+    for name, pd in rasi.items():
+        orb = _COMBUSTION_ORB.get(name)
+        if orb is None:
+            continue
+        if pd.is_retrograde and name in _COMBUSTION_ORB_RETRO:
+            orb = _COMBUSTION_ORB_RETRO[name]
+        diff = abs(longitudes[name] - sun_lon) % 360.0
+        sep = min(diff, 360.0 - diff)
+        if sep <= orb:
+            pd.is_combust = True
+            pd.combust_proximity_degrees = round(sep, 4)
+
+
 def _build_varga_chart(varga_positions, retro_planets) -> dict[str, PlanetData]:
+    # varga_positions[0] is the ascendant's position in this varga; the varga
+    # lagna sign anchors house counting within the divisional chart. Without
+    # this, house is meaningless (it was previously hardcoded to 1).
+    varga_lagna_sign_idx = varga_positions[0][1][0]
     chart: dict[str, PlanetData] = {}
     for pid, (sign_idx, deg) in varga_positions[1:]:
         name = utils.PLANETS[pid]
@@ -99,10 +133,11 @@ def _build_varga_chart(varga_positions, retro_planets) -> dict[str, PlanetData]:
         nakshatra = utils.longitude_to_nakshatra(sign_idx * 30 + deg)
         dignity = utils.get_planet_dignity(name, sign)
         is_retro = pid in retro_planets
+        house = (sign_idx - varga_lagna_sign_idx) % 12 + 1
 
         chart[name] = PlanetData(
             planet=name, sign=sign, degrees=round(deg, 4),
-            nakshatra=nakshatra, dignity=dignity, house=1,
+            nakshatra=nakshatra, dignity=dignity, house=house,
             conjunctions=[], aspects=[], is_retrograde=is_retro,
         )
     return chart
@@ -138,6 +173,7 @@ class Chart:
 
         # Build Rasi Chart with conjunctions and aspects
         rasi = {}
+        longitudes: dict[str, float] = {}
         for pid, (sign_idx, deg) in rasi_positions[1:]:
             name = utils.PLANETS[pid]
             sign = utils.SIGNS[sign_idx]
@@ -146,6 +182,7 @@ class Chart:
             is_retro = pid in retro_planets
             final_lon = sign_idx * 30.0 + deg
             house = _compute_house(final_lon, sid_cusps)
+            longitudes[name] = final_lon
 
             rasi[name] = PlanetData(
                 planet=name, sign=sign, degrees=round(deg, 4),
@@ -156,6 +193,8 @@ class Chart:
         for name, pd in rasi.items():
             pd.conjunctions = _find_conjunctions(name, pd.house, rasi)
             pd.aspects = _find_aspects(name, pd.house, rasi)
+
+        _apply_combustion(rasi, longitudes)
 
         # Build other divisional charts using standardized vargas
         self._snapshot = ChartSnapshot(

@@ -37,6 +37,8 @@ class PlanetPlacement(BaseModel):
     is_retrograde: bool
     is_gandanta: bool = False
     gandanta_proximity_degrees: float | None = None
+    is_combust: bool = False
+    combust_proximity_degrees: float | None = None
 
 
 class ChartResponse(BaseModel):

@@ -82,6 +82,8 @@ def _pd_to_schema(pd: PlanetData) -> PlanetPlacement:
         is_retrograde=pd.is_retrograde,
         is_gandanta=is_gandanta,
         gandanta_proximity_degrees=gandanta_proximity if is_gandanta else None,
+        is_combust=pd.is_combust,
+        combust_proximity_degrees=pd.combust_proximity_degrees,
     )
 
 
