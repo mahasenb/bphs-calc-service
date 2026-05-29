@@ -75,6 +75,8 @@ def _to_personal_data(p: PersonalDataIn) -> PersonalData:
 
 def _pd_to_schema(pd: PlanetData) -> PlanetPlacement:
     is_gandanta, gandanta_proximity = utils.check_gandanta(pd.sign, pd.degrees)
+    total_lon = (utils.SIGNS.index(pd.sign) * 30 + pd.degrees) % 360
+    pada_lord = utils.nakshatra_pada_lord(total_lon)
     return PlanetPlacement(
         planet=pd.planet, sign=pd.sign, degrees=pd.degrees,
         nakshatra=pd.nakshatra, dignity=pd.dignity, house=pd.house,
@@ -85,6 +87,7 @@ def _pd_to_schema(pd: PlanetData) -> PlanetPlacement:
         is_combust=pd.is_combust,
         combust_proximity_degrees=pd.combust_proximity_degrees,
         chalit_house=pd.chalit_house,
+        pada_lord=pada_lord,
     )
 
 
@@ -176,6 +179,7 @@ def yogas_endpoint(p: PersonalDataIn):
             houses_involved=y.houses_involved,
             strength=y.strength,
             is_viparita_raja=y.is_viparita_raja,
+            activating_lords=y.activating_lords,
         )
         for y in yogas
     ]

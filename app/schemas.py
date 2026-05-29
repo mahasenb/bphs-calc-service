@@ -40,6 +40,7 @@ class PlanetPlacement(BaseModel):
     is_combust: bool = False
     combust_proximity_degrees: float | None = None
     chalit_house: int | None = None      # secondary Bhava-Chalit (Placidus cusp) house
+    pada_lord: str | None = None
 
 
 class ChartResponse(BaseModel):
@@ -108,6 +109,7 @@ class YogaOut(BaseModel):
     houses_involved: list[int]
     strength: str
     is_viparita_raja: bool = False
+    activating_lords: list[str] = []
 
 
 # --- Transits ---

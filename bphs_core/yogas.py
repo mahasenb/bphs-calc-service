@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from .chart import ChartSnapshot
 from . import utils
 
@@ -16,6 +16,7 @@ class Yoga:
     houses_involved: list[int]
     strength: str
     is_viparita_raja: bool = False
+    activating_lords: list[str] = field(default_factory=list)
 
 
 def _house_lord(snapshot: ChartSnapshot, house: int) -> str | None:
@@ -26,6 +27,21 @@ def _house_lord(snapshot: ChartSnapshot, house: int) -> str | None:
 def _planet_house(snapshot: ChartSnapshot, planet: str) -> int:
     pd = snapshot.rasi_chart.get(planet)
     return pd.house if pd else 0
+
+
+def _compute_yoga_strength(snapshot: ChartSnapshot, planets: list[str]) -> str:
+    dignities = []
+    for p in planets:
+        pd = snapshot.rasi_chart.get(p)
+        if pd:
+            dignities.append(pd.dignity)
+    if not dignities:
+        return "moderate"
+    if any(d in ("debilitated", "enemy") for d in dignities):
+        return "mild"
+    if all(d in ("exalted", "own sign", "moolatrikona") for d in dignities):
+        return "strong"
+    return "moderate"
 
 
 def detect_viparita_raja_yoga(snapshot: ChartSnapshot) -> list[Yoga]:
@@ -45,8 +61,9 @@ def detect_viparita_raja_yoga(snapshot: ChartSnapshot) -> list[Yoga]:
                 name=name, description=desc,
                 planets_involved=[lord],
                 houses_involved=[dusthana_house, lord_house],
-                strength="strong",
+                strength=_compute_yoga_strength(snapshot, [lord]),
                 is_viparita_raja=True,
+                activating_lords=[lord],
             ))
     return yogas
 
@@ -72,7 +89,8 @@ def detect_panchamahapurusha(snapshot: ChartSnapshot) -> list[Yoga]:
                 name=name, description=desc,
                 planets_involved=[planet],
                 houses_involved=[pd.house],
-                strength="strong",
+                strength=_compute_yoga_strength(snapshot, [planet]),
+                activating_lords=[planet],
             ))
     return yogas
 
@@ -88,7 +106,8 @@ def detect_raja_yogas(snapshot: ChartSnapshot) -> list[Yoga]:
                     name="Raja Yoga",
                     description=f"{kl} lords both kendra and trikona",
                     planets_involved=[kl], houses_involved=[],
-                    strength="strong",
+                    strength=_compute_yoga_strength(snapshot, [kl]),
+                    activating_lords=[kl],
                 ))
             elif kl and tl:
                 kl_pd = snapshot.rasi_chart.get(kl)
@@ -99,7 +118,8 @@ def detect_raja_yogas(snapshot: ChartSnapshot) -> list[Yoga]:
                         description=f"{kl} (kendra lord) conjunct {tl} (trikona lord)",
                         planets_involved=[kl, tl],
                         houses_involved=[kl_pd.house],
-                        strength="moderate",
+                        strength=_compute_yoga_strength(snapshot, [kl, tl]),
+                        activating_lords=[kl, tl],
                     ))
     return yogas
 
@@ -121,7 +141,8 @@ def detect_dhana_yogas(snapshot: ChartSnapshot) -> list[Yoga]:
                 description=f"{a} and {b} conjunct — wealth accumulation",
                 planets_involved=[a, b],
                 houses_involved=houses,
-                strength="moderate",
+                strength=_compute_yoga_strength(snapshot, [a, b]),
+                activating_lords=[a, b],
             ))
     return yogas
 
@@ -174,7 +195,8 @@ def detect_parivartana_yoga(snapshot: ChartSnapshot) -> list[Yoga]:
             ),
             planets_involved=sorted([p_a, lord_of_a]),
             houses_involved=sorted([house_a, house_b]),
-            strength="strong",
+            strength=_compute_yoga_strength(snapshot, sorted([p_a, lord_of_a])),
+            activating_lords=sorted([p_a, lord_of_a]),
         ))
     return yogas
 
