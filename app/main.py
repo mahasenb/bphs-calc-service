@@ -15,6 +15,7 @@ from .schemas import (
     MuhurtRequest, MuhurtResponse,
     LagnaShuddhiRequest, LagnaShuddhiResponse, LagnaShuddhiSample, TimeWindow,
     CompatRequest, CompatResponse, KutaScore, MangalDoshaResult, DashaOverlap,
+    ProfileResponse,
 )
 from bphs_core.chart import Chart, PersonalData, ChartSnapshot, PlanetData
 from bphs_core import strength as strength_mod
@@ -259,6 +260,14 @@ def special_points_endpoint(p: PersonalDataIn):
         karakamsa=sp_mod.get_karakamsa(s).sign,
         jaimini_karakas=[JaiminiKaraka(**k) for k in karakas_raw],
     )
+
+
+@app.post("/v1/profile", response_model=ProfileResponse, dependencies=AUTH)
+def profile_endpoint(p: PersonalDataIn):
+    from bphs_core.profile import compute_profile
+    _, s = _get_chart(p)
+    result = compute_profile(s, p.birth_date)
+    return ProfileResponse(**result)
 
 
 @app.post("/v1/muhurat", response_model=MuhurtResponse, dependencies=AUTH)

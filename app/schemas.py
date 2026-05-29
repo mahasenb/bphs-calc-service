@@ -147,6 +147,16 @@ class SpecialPointsResponse(BaseModel):
     jaimini_karakas: list[JaiminiKaraka] = []
 
 
+# --- Profile (Phase 2) ---
+
+class ProfileResponse(BaseModel):
+    avkahada: dict               # Varna, Yoni, Gana, Vasya, Nadi
+    kalsarp: dict                # present, name, partial, rahu_house
+    sade_sati_lifetime: list     # [{phase, start, end}, ...]
+    numerology: dict             # {radical, destiny}
+    favourable: dict             # lucky_number, lucky_metal, lucky_stone, lucky_color
+
+
 # --- Meta ---
 
 class SourceInfo(BaseModel):
